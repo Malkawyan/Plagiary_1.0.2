@@ -37,6 +37,7 @@
         .header h1 {
             font-size: 36px;
             color: #e74c3c;
+            animation: fadeIn 1s ease-in-out;
         }
 
         .info-columns {
@@ -53,6 +54,12 @@
             border-radius: 8px;
             width: 30%;
             text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .info-column:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
         }
 
         .info-column h2 {
@@ -72,7 +79,7 @@
             margin-bottom: 20px;
         }
 
-        .input-container input {
+        .input-container textarea {
             padding: 15px;
             font-size: 18px;
             border: 1px solid #ccc;
@@ -81,10 +88,12 @@
             width: 100%;
             background-color: #fff;
             transition: border-color 0.3s ease;
+            resize: vertical;
         }
 
-        .input-container input:focus {
+        .input-container textarea:focus {
             border-color: #e74c3c;
+            outline: none;
         }
 
         .button-container {
@@ -116,6 +125,12 @@
             border-radius: 8px;
             border: 1px solid #ccc;
             min-height: 150px;
+            transition: opacity 0.3s ease;
+            color: inherit; /* Наследуем цвет текста от родителя */
+        }
+
+        #uni-results {
+            color: inherit; /* Наследуем цвет текста от родителя */
         }
 
         .footer {
@@ -141,6 +156,15 @@
             color: #e74c3c;
         }
 
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
         @media (max-width: 768px) {
             .info-columns {
                 flex-direction: column;
@@ -151,7 +175,7 @@
                 margin-bottom: 15px;
             }
 
-            .input-container input {
+            .input-container textarea {
                 font-size: 16px;
                 padding: 12px;
             }
@@ -308,17 +332,25 @@
 
                     console.log(`Время обработки запроса: ${timeString}`);
 
-                    const uniqueness = data.overall_uniqueness;
+                    const uniqueness = parseFloat(data.overall_uniqueness);
                     const uniResultsDiv = document.getElementById('uni-results');
-                    uniResultsDiv.innerHTML = `Уникальность: ${uniqueness}`;
+                    uniResultsDiv.innerHTML = `Уникальность: ${uniqueness}%`;
 
+                    // Определяем цвет в зависимости от уникальности
+                    let color;
                     if (uniqueness >= 75.0) {
-                        uniResultsDiv.style.color = 'green';
+                        color = 'green';
                     } else if (uniqueness >= 50.0) {
-                        uniResultsDiv.style.color = 'orange';
+                        color = 'orange';
                     } else {
-                        uniResultsDiv.style.color = 'red';
+                        color = 'red';
                     }
+
+                    // Применяем цвет к верхнему правому окну
+                    uniResultsDiv.style.color = color;
+
+                    // Применяем цвет к основному окну
+                    resultsDiv.style.color = color;
 
                     // Добавляем время выполнения запроса в uni-results
                     const timeDiv = document.createElement('div');
@@ -329,7 +361,7 @@
                     // Добавляем новый элемент с временем в uni-results
                     uniResultsDiv.appendChild(timeDiv);
 
-                    resultsDiv.innerHTML = `<p>Общий процент уникальности: ${uniqueness}</p>`;
+                    resultsDiv.innerHTML = `<p>Общий процент уникальности: ${uniqueness}%</p>`;
                 }
             })
             .catch(error => {
@@ -341,8 +373,6 @@
                 cancelButton.disabled = true;
             });
         }
-
-
 
         function cancelCheck() {
             cancelRequested = true;

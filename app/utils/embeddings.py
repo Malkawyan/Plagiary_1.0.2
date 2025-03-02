@@ -1,11 +1,13 @@
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import spacy
+import torch
 
 # Загрузка языковой модели spaCy для предварительной обработки текста
 nlp = spacy.load("ru_core_news_lg")
 # Модель SentenceTransformer для генерации эмбеддингов
-model = SentenceTransformer('paraphrase-xlm-r-multilingual-v1')
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model = SentenceTransformer('paraphrase-xlm-r-multilingual-v1').to(device)
 
 def preprocess_text_to_embeddings(text, language):
     """

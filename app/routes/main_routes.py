@@ -25,3 +25,4 @@ def process_text_route():
     except Exception as e:
         logging.error(f"Произошла ошибка при обработке текста: {e}")
         return jsonify({"error": "An error occurred"}), 500
+
