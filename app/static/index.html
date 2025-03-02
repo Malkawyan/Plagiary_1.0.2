@@ -312,7 +312,11 @@
             const formData = new FormData();
             formData.append('text', text);
 
-            const startTime = performance.now();  // Записываем время перед отправкой запроса
+            // Если файл загружен, добавляем его в FormData
+            if (selectedFile) {
+                formData.append('file', selectedFile);  // Добавляем файл
+                console.log("Файл выбран:", selectedFile.name);  // Логируем имя файла
+            }
 
             fetch('/', {
                 method: 'POST',
@@ -321,22 +325,11 @@
             .then(response => response.json())
             .then(data => {
                 if (!cancelRequested) {
-                    const endTime = performance.now();  // Записываем время после получения ответа
-                    const duration = endTime - startTime;  // Время выполнения запроса в миллисекундах
-
-                    // Преобразуем время в формат минуты:секунды
-                    const minutes = Math.floor(duration / 60000);
-                    const seconds = ((duration % 60000) / 1000).toFixed(2);
-
-                    const timeString = `${minutes}:${seconds.padStart(2, '0')}`;  // Форматируем строку времени
-
-                    console.log(`Время обработки запроса: ${timeString}`);
-
+                    console.log("Ответ от сервера:", data);  // Логируем ответ
                     const uniqueness = parseFloat(data.overall_uniqueness);
                     const uniResultsDiv = document.getElementById('uni-results');
                     uniResultsDiv.innerHTML = `Уникальность: ${uniqueness}%`;
 
-                    // Определяем цвет в зависимости от уникальности
                     let color;
                     if (uniqueness >= 75.0) {
                         color = 'green';
@@ -346,22 +339,26 @@
                         color = 'red';
                     }
 
-                    // Применяем цвет к верхнему правому окну
                     uniResultsDiv.style.color = color;
-
-                    // Применяем цвет к основному окну
                     resultsDiv.style.color = color;
 
-                    // Добавляем время выполнения запроса в uni-results
-                    const timeDiv = document.createElement('div');
-                    timeDiv.style.fontSize = '14px';  // Уменьшаем размер шрифта
-                    timeDiv.style.color = '#3498db';  // Цвет времени
-                    timeDiv.textContent = `Время обработки: ${timeString}`;
+                    // Отображаем файлы с заимствованиями
+                    if (data.file_similarity && Object.keys(data.file_similarity).length > 0) {
+                        let filesHtml = '<p>Файлы с заимствованиями:</p><ul>';
+                        for (const [file, similarity] of Object.entries(data.file_similarity)) {
+                            filesHtml += `<li>${file}: ${similarity.toFixed(2)}%</li>`;
+                        }
+                        filesHtml += '</ul>';
+                        resultsDiv.innerHTML += filesHtml;
+                    } else {
+                        resultsDiv.innerHTML += '<p>Заимствования не обнаружены.</p>';
+                    }
 
-                    // Добавляем новый элемент с временем в uni-results
-                    uniResultsDiv.appendChild(timeDiv);
-
-                    resultsDiv.innerHTML = `<p>Общий процент уникальности: ${uniqueness}%</p>`;
+                    // Выделяем совпавшие предложения
+                    if (data.matched_indices) {
+                        const highlightedText = highlightMatchedSentences(text, data.matched_indices);
+                        textArea.innerHTML = highlightedText;
+                    }
                 }
             })
             .catch(error => {
