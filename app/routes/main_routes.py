@@ -6,48 +6,24 @@ from app.config import Config
 from app.services.file_storage import get_unique_filename
 from app.services.file_processing import read_file
 import os
-from datetime import datetime
 
 main_routes = Blueprint('main', __name__)
 
 @main_routes.route('/', methods=['GET'])
 def serve_html():
+    """
+        Отправляет главную страницу интерфейса пользователю.
+        :return: HTML-файл главной страницы.
+    """
     logging.info("Отправка главной страницы интерфейса пользователю.")
     return send_from_directory(Config.STATIC_FOLDER, 'index.html')
 
-# @main_routes.route('/', methods=['POST'])
-# def process_text_route():
-#     text = request.form.get('text')
-#     if not text:
-#         logging.error("Ошибка: текст отсутствует в запросе.")
-#         return jsonify({"error": "No text provided"}), 400
-#
-#     try:
-#         language = detect(text)
-#         result = process_text(text, language)
-#         return jsonify(result)
-#     except Exception as e:
-#         logging.error(f"Произошла ошибка при обработке текста: {e}")
-#         return jsonify({"error": "An error occurred"}), 500
-
-# @main_routes.route('/', methods=['POST'])
-# def process_text_route():
-#     text = request.form.get('text')
-#     if not text:
-#         logging.error("Ошибка: текст отсутствует в запросе.")
-#         return jsonify({"error": "No text provided"}), 400
-#
-#     try:
-#         language = detect(text)
-#         result = process_text(text, language)
-#         return jsonify(result)
-#     except Exception as e:
-#         logging.error(f"Произошла ошибка при обработке текста: {e}")
-#         return jsonify({"error": "An error occurred"}), 500
-
-
 @main_routes.route('/', methods=['POST'])
 def process_text_route():
+    """
+       Обрабатывает текст, переданный в запросе, либо извлекает его из загруженного файла.
+       :return: JSON с результатом обработки текста или сообщением об ошибке.
+    """
     text = request.form.get('text')
     uploaded_file = request.files.get('file')  # Получаем загруженный файл
 

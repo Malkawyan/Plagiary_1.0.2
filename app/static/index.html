@@ -4,13 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Антиплагиат</title>
-    <link rel="icon" href="data:image/x-icon,;">
+    <link rel="icon" href="data:image/x-icon">
+    <link rel="stylesheet" href="../styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+        }
+
+        .editable-content {
+            padding: 15px;
+            font-size: 18px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            width: 100%;
+            background-color: #fff;
+            transition: border-color 0.3s ease;
+            min-height: 200px;
+            max-height: 500px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        .editable-content:focus {
+            border-color: #e74c3c;
+            outline: none;
+        }
+
+        .editable-content:empty:before {
+            content: attr(placeholder);
+            color: #888;
+        }
+
+        /* Стиль для неуникальных предложений */
+        .non-unique {
+            color: red;
+            background-color: rgba(255, 0, 0, 0.1);
         }
 
         body {
@@ -156,6 +189,23 @@
             color: #e74c3c;
         }
 
+        .highlighted-container {
+            background-color: white;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            margin-top: 20px;
+            overflow: auto;
+            max-height: 400px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        .non-unique {
+            color: red;
+            font-weight: bold;
+        }
+
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -229,12 +279,12 @@
         </div>
 
         <div class="input-container">
-            <textarea id="file-content" placeholder="Введите текст или загрузите файл..." rows="10"></textarea>
+            <div id="file-content" contenteditable="true" class="editable-content" placeholder="Введите текст или загрузите файл..."></div>
             <p id="status"></p>
         </div>
 
         <div class="button-container">
-            <input type="file" id="file-input" class="check-btn" />
+            <input type="file" id="file-input" class="check-btn"/>
             <button id="start-button" class="check-btn" disabled>Проверить</button>
             <button id="cancel-button" class="cancel-btn">Отменить</button>
         </div>
@@ -259,10 +309,11 @@
         const cancelButton = document.getElementById('cancel-button');
         const statusDiv = document.getElementById('status');
         const resultsDiv = document.getElementById('output');
-        const textArea = document.getElementById('file-content');
+        const contentDiv = document.getElementById('file-content'); // Теперь это div, а не textarea
         const fileInput = document.getElementById('file-input');
 
         let selectedFile = null;
+        let originalText = ""; // Сохраняем оригинальный текст для отправки на сервер
 
         function readFileAsText(file) {
             const reader = new FileReader();
@@ -288,13 +339,17 @@
                     if (selectedFile.name.endsWith('.docx')) {
                         mammoth.extractRawText({arrayBuffer: arrayBuffer})
                             .then(function(result) {
-                                textArea.value = result.value;
+                                originalText = result.value; // Сохраняем оригинальный текст
+                                contentDiv.textContent = originalText; // Устанавливаем текст в div
                             })
                             .catch((error) => {
                                 statusDiv.textContent = `Ошибка при извлечении текста: ${error}`;
                             });
                     } else {
-                        textArea.value = arrayBuffer;
+                        // Предполагаем, что это текстовый файл
+                        const decoder = new TextDecoder('utf-8');
+                        originalText = decoder.decode(arrayBuffer); // Сохраняем оригинальный текст
+                        contentDiv.textContent = originalText; // Устанавливаем текст в div
                     }
                 };
                 reader.readAsArrayBuffer(selectedFile);
@@ -302,20 +357,81 @@
             }
         });
 
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Функция для подсветки неуникальных предложений
+        function highlightNonUniqueText(text, matchedIndices) {
+            if (!text || !matchedIndices || matchedIndices.length === 0) {
+                return escapeHtml(text);
+            }
+
+            // Разбиваем текст на предложения (упрощенная версия, должна совпадать с бэкендом)
+            const sentenceRegex = /[^.!?]+[.!?]+/g;
+            const sentences = [];
+            let match;
+
+            while ((match = sentenceRegex.exec(text)) !== null) {
+                sentences.push({
+                    text: match[0],
+                    start: match.index,
+                    end: match.index + match[0].length
+                });
+            }
+
+            // Если по какой-то причине разделение на предложения не сработало
+            if (sentences.length === 0) {
+                return escapeHtml(text);
+            }
+
+            // Создаем HTML с подсветкой
+            let htmlResult = '';
+            let lastEnd = 0;
+
+            for (let i = 0; i < sentences.length; i++) {
+                const sentence = sentences[i];
+
+                // Добавляем текст между предложениями (если есть)
+                if (sentence.start > lastEnd) {
+                    htmlResult += escapeHtml(text.substring(lastEnd, sentence.start));
+                }
+
+                // Проверяем, является ли предложение неуникальным
+                if (matchedIndices.includes(i)) {
+                    htmlResult += `<span class="non-unique">${escapeHtml(sentence.text)}</span>`;
+                } else {
+                    htmlResult += escapeHtml(sentence.text);
+                }
+
+                lastEnd = sentence.end;
+            }
+
+            // Добавляем оставшийся текст после последнего предложения
+            if (lastEnd < text.length) {
+                htmlResult += escapeHtml(text.substring(lastEnd));
+            }
+
+            return htmlResult;
+        }
+
         function startCheck() {
             cancelRequested = false;
             resultsDiv.innerHTML = 'Идёт проверка...';
             startButton.disabled = true;
             cancelButton.disabled = false;
 
-            const text = textArea.value;
+            // Получаем текст для проверки
+            const text = originalText || contentDiv.textContent;
             const formData = new FormData();
             formData.append('text', text);
 
             // Если файл загружен, добавляем его в FormData
             if (selectedFile) {
-                formData.append('file', selectedFile);  // Добавляем файл
-                console.log("Файл выбран:", selectedFile.name);  // Логируем имя файла
+                formData.append('file', selectedFile);
+                console.log("Файл выбран:", selectedFile.name);
             }
 
             fetch('/', {
@@ -325,7 +441,7 @@
             .then(response => response.json())
             .then(data => {
                 if (!cancelRequested) {
-                    console.log("Ответ от сервера:", data);  // Логируем ответ
+                    console.log("Ответ от сервера:", data);
                     const uniqueness = parseFloat(data.overall_uniqueness);
                     const uniResultsDiv = document.getElementById('uni-results');
                     uniResultsDiv.innerHTML = `Уникальность: ${uniqueness}%`;
@@ -342,23 +458,36 @@
                     uniResultsDiv.style.color = color;
                     resultsDiv.style.color = color;
 
-                    // Отображаем файлы с заимствованиями
-                    if (data.file_similarity && Object.keys(data.file_similarity).length > 0) {
-                        let filesHtml = '<p>Файлы с заимствованиями:</p><ul>';
-                        for (const [file, similarity] of Object.entries(data.file_similarity)) {
-                            filesHtml += `<li>${file}: ${similarity.toFixed(2)}%</li>`;
-                        }
-                        filesHtml += '</ul>';
-                        resultsDiv.innerHTML += filesHtml;
-                    } else {
-                        resultsDiv.innerHTML += '<p>Заимствования не обнаружены.</p>';
+                    // Подсвечиваем неуникальные предложения прямо в окне редактирования
+                    if (data.matched_indices && data.matched_indices.length > 0) {
+                        const highlightedText = highlightNonUniqueText(text, data.matched_indices);
+                        contentDiv.innerHTML = highlightedText; // Устанавливаем HTML с подсветкой
                     }
 
-                    // Выделяем совпавшие предложения
-                    if (data.matched_indices) {
-                        const highlightedText = highlightMatchedSentences(text, data.matched_indices);
-                        textArea.innerHTML = highlightedText;
+                    // Отображаем информацию о заимствованиях
+                    let resultsHTML = `<p>Уникальность: ${uniqueness.toFixed(2)}%</p>`;
+
+                    // Отображаем файлы с заимствованиями
+                    if (data.file_similarity && Object.keys(data.file_similarity).length > 0) {
+                        resultsHTML += '<p>Файлы с заимствованиями:</p><ul>';
+                        for (const [file, similarity] of Object.entries(data.file_similarity)) {
+                            resultsHTML += `<li>${file}: ${similarity.toFixed(2)}%</li>`;
+                        }
+                        resultsHTML += '</ul>';
+                    } else {
+                        resultsHTML += '<p>Заимствования не обнаружены.</p>';
                     }
+
+                    resultsDiv.innerHTML = resultsHTML;
+
+                    // Выводим результаты SEO
+                    const seoResultsDiv = document.getElementById('seo-results');
+                    const spamScore = data.spam_score !== undefined ? data.spam_score : 'Н/Д';
+                    const waterScore = data.water_score !== undefined ? data.water_score : 'Н/Д';
+                    seoResultsDiv.innerHTML = `
+                        <p>Спамность: ${data.spam_score}%</p>
+                        <p>Водянистость: ${data.water_score}%</p>
+                    `;
                 }
             })
             .catch(error => {
@@ -368,6 +497,7 @@
             })
             .finally(() => {
                 cancelButton.disabled = true;
+                startButton.disabled = false;
             });
         }
 
@@ -378,6 +508,11 @@
             cancelButton.disabled = true;
             startButton.disabled = false;
         }
+
+        // Обработчик ввода текста в редактируемый div
+        contentDiv.addEventListener('input', function() {
+            originalText = this.textContent; // Обновляем сохраненный текст при редактировании
+        });
 
         startButton.addEventListener('click', startCheck);
         cancelButton.addEventListener('click', cancelCheck);
