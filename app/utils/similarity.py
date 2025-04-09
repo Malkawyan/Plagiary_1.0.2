@@ -30,7 +30,7 @@ def calculate_similarity_matrix(uploaded_embeddings, base_embeddings):
     return similarity_matrix.cpu().numpy()  # Переносим обратно на CPU для дальнейшей обработки
 
 
-def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, threshold=80):
+def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, threshold=95):
     """
     Вычисляет общую уникальность текста и проценты заимствования для каждого файла.
     :param uploaded_embeddings: список эмбеддингов загруженного текста.
