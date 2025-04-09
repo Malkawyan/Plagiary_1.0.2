@@ -1,31 +1,33 @@
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from functools import lru_cache
 import spacy
 import torch
+from sentence_transformers import SentenceTransformer
 
-# Загрузка языковой модели spaCy для предварительной обработки текста
-nlp = spacy.load("ru_core_news_lg")
-# Модель SentenceTransformer для генерации эмбеддингов
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model = SentenceTransformer('paraphrase-xlm-r-multilingual-v1').to(device)
+# Ленивая загрузка моделей
+_nlp = None
+_model = None
 
-def preprocess_text_to_embeddings(text, language):
-    """
-    Выполняет разделение текста на предложения и преобразует каждое предложение в эмбеддинг.
+def get_nlp():
+    global _nlp
+    if _nlp is None:
+        _nlp = spacy.load("ru_core_news_lg")
+    return _nlp
 
-    :param text: Текст, который нужно обработать
-    :param language: Язык текста (например, 'ru', 'en')
-    :return: Список эмбеддингов предложений
-    """
-    sentences = [sent.text.strip() for sent in nlp(text).sents]  # Разделяем текст на предложения
-    return [model.encode(sentence) for sentence in sentences]  # Преобразуем каждое предложение в эмбеддинг
+def get_model():
+    global _model
+    if _model is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        _model = SentenceTransformer('paraphrase-xlm-r-multilingual-v1').to(device)
+    return _model
 
-def load_embeddings_from_file(file_path):
-    """
-    Загружает эмбеддинги из файла.
+@lru_cache(maxsize=128)
+def preprocess_text_to_embeddings(text: str, language: str) -> list[np.ndarray]:
+    """Кэширует эмбеддинги для часто повторяющихся текстов."""
+    sentences = [sent.text.strip() for sent in get_nlp()(text).sents]
+    return [get_model().encode(sentence) for sentence in sentences]
 
-    :param file_path: Путь к текстовому файлу с эмбеддингами
-    :return: Список эмбеддингов (векторных представлений предложений)
-    """
+def load_embeddings_from_file(file_path: str) -> list[np.ndarray]:
+    """Оставлено без изменений (кэширование на уровне process_text)."""
     with open(file_path, 'r', encoding='utf-8') as file:
         return [np.array(list(map(float, line.strip().split()))) for line in file]
