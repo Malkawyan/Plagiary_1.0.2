@@ -285,7 +285,7 @@
         </div>
 
         <div class="button-container">
-            <input type="file" id="file-input" class="check-btn"/>
+            <input type="file" id="file-input" class="check-btn" accept=".docx, application/vnd.openxmlformats-officedocument.wordprocessingml.document"/>
             <button id="start-button" class="check-btn" disabled>Проверить</button>
             <button id="cancel-button" class="cancel-btn">Отменить</button>
         </div>
@@ -370,7 +370,7 @@
                 return escapeHtml(text);
             }
 
-            // Разбиваем текст на предложения (упрощенная версия, должна совпадать с бэкендом)
+            // Разбиваем текст на предложения
             const sentenceRegex = /[^.!?]+[.!?]+/g;
             const sentences = [];
             let match;

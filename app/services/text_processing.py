@@ -1,44 +1,78 @@
-import numpy as np
-from functools import lru_cache
-from pathlib import Path
+# Импорт необходимых модулей
+from functools import lru_cache  # Для кэширования результатов функций
+from pathlib import Path  # Для работы с путями файловой системы
 from app.utils.embeddings import preprocess_text_to_embeddings, load_embeddings_from_file
 from app.utils.similarity import calculate_uniqueness_and_similarity
 from app.utils.seo import calculate_spamminess, calculate_wateriness
-from app.config import Config
+from app.config import Config  # Конфигурация приложения
 
 
-@lru_cache(maxsize=32)
+@lru_cache(maxsize=32)  # Кэшируем результаты на 32 вызова для оптимизации
 def _get_base_sentences_cache():
-    """Кэширует загрузку эмбеддингов из базовой папки."""
-    base_sentences = {}
-    base_folder_path = Path(Config.BASE_FOLDER)
+    """
+    Загружает и кэширует эмбеддинги базовых документов из указанной папки.
+    Возвращает словарь {имя_файла: эмбеддинги}
 
+    Кэширование используется для:
+    1. Ускорения последующих вызовов
+    2. Снижения нагрузки на файловую систему
+    3. Оптимизации использования памяти (maxsize=32)
+    """
+    base_sentences = {}
+    base_folder_path = Path(Config.BASE_FOLDER)  # Получаем путь из конфига
+
+    # Проверка существования папки
     if not base_folder_path.exists():
         raise FileNotFoundError("Base folder does not exist")
 
+    # Рекурсивно обрабатываем все файлы в папке
     for base_file in base_folder_path.iterdir():
         if base_file.is_file():
+            # Загружаем эмбеддинги для каждого файла
             base_sentences[base_file.name] = load_embeddings_from_file(base_file)
     return base_sentences
 
 
 def process_text(text: str, language: str) -> dict:
     """
-    Оптимизированная версия с кэшированием загрузки базовых эмбеддингов.
-    """
-    water_score = calculate_wateriness(text)
-    spam_score = calculate_spamminess(text)
-    uploaded_embeddings = preprocess_text_to_embeddings(text, language)
-    base_sentences = _get_base_sentences_cache()  # Используем кэшированную версию
+    Основная функция обработки текста, выполняющая:
+    1. Анализ водянистости и спамности текста
+    2. Преобразование текста в эмбеддинги
+    3. Сравнение с базой документов
+    4. Расчет уникальности
 
+    Args:
+        text (str): Входной текст для анализа
+        language (str): Язык текста (для обработки)
+
+    Returns:
+        dict: Результаты анализа с ключами:
+            - overall_uniqueness: процент уникальности
+            - file_similarity: сходство с другими файлами
+            - water_score: показатель водянистости
+            - spam_score: показатель спамности
+            - matched_indices: индексы совпавших предложений
+    """
+    # SEO-анализ текста
+    water_score = calculate_wateriness(text)  # Расчет водянистости
+    spam_score = calculate_spamminess(text)  # Расчет спамности
+
+    # Преобразование текста в векторные представления
+    uploaded_embeddings = preprocess_text_to_embeddings(text, language)
+
+    # Получаем кэшированные эмбеддинги базы документов
+    base_sentences = _get_base_sentences_cache()
+
+    # Сравнение с базой документов
     overall_uniqueness, file_similarity, matched_indices = calculate_uniqueness_and_similarity(
         uploaded_embeddings, base_sentences
     )
 
+    # Формируем итоговый результат
     return {
-        "overall_uniqueness": f"{overall_uniqueness:.2f}%",
-        "file_similarity": file_similarity,
-        "water_score": water_score,
-        "spam_score": spam_score,
-        "matched_indices": matched_indices
+        "overall_uniqueness": f"{overall_uniqueness:.2f}%",  # Форматируем проценты
+        "file_similarity": file_similarity,  # Сходство с конкретными файлами
+        "water_score": water_score,  # Показатель водянистости
+        "spam_score": spam_score,  # Показатель спамности
+        "matched_indices": matched_indices  # Индексы совпадений для подсветки
     }
