@@ -30,44 +30,39 @@ def calculate_similarity_matrix(uploaded_embeddings, base_embeddings):
     return similarity_matrix.cpu().numpy()  # Переносим обратно на CPU для дальнейшей обработки
 
 
-def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, threshold=95):
+def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, sentences, threshold=80):
     """
     Вычисляет общую уникальность текста и проценты заимствования для каждого файла.
     :param uploaded_embeddings: список эмбеддингов загруженного текста.
     :param base_embeddings: словарь с эмбеддингами базы (ключ — имя файла, значение — список эмбеддингов).
+    :param sentences: список всех предложений загруженного текста.
     :param threshold: порог сходства (по умолчанию 80%).
-    :return: кортеж (общая уникальность, словарь с процентами заимствования для каждого файла).
+    :return: кортеж (общая уникальность, словарь с процентами заимствования для каждого файла, список неуникальных предложений).
     """
-    total_sentences = len(uploaded_embeddings)  # Общее количество предложений в загруженном тексте
+    total_sentences = len(uploaded_embeddings)
     if total_sentences == 0:
-        return 100, {}  # Если предложений нет, текст считается полностью уникальным
+        return 100, {}, []
 
-    # Получаем матрицу сходств между загруженным текстом и базой
     similarity_matrix = calculate_similarity_matrix(uploaded_embeddings, base_embeddings)
-    unique_sentences = 0  # Счетчик уникальных предложений
-    file_similarity = {file_name: 0 for file_name in base_embeddings.keys()}  # Инициализируем словарь заимствований
-    matched_indices = [] # Список неуникальных предложений
+    unique_sentences = 0
+    file_similarity = {file_name: 0 for file_name in base_embeddings.keys()}
+    matched_sentences = []
 
-    # Создаем список всех эмбеддингов базы и соответствующих им файлов
     base_files = [file for file, embeddings in base_embeddings.items() for _ in embeddings]
 
-    # Проходим по строкам матрицы сходств (по каждому предложению загруженного текста)
     for i, row in enumerate(similarity_matrix):
-        max_similarity = max(row) * 100  # Находим максимальное сходство среди базы
+        max_similarity = max(row) * 100
         if max_similarity > threshold:
-            file_similarity[base_files[row.argmax()]] += 1  # Увеличиваем счетчик совпадений для файла
-            matched_indices.append(i)
+            file_similarity[base_files[row.argmax()]] += 1
+            matched_sentences.append(sentences[i])
         else:
-            unique_sentences += 1  # Если сходство ниже порога, считаем предложение уникальным
+            unique_sentences += 1
 
-    # Вычисляем общую уникальность текста
     overall_uniqueness = (unique_sentences / total_sentences) * 100
 
-    # Рассчитываем процент заимствования для каждого файла
     for file_name in file_similarity:
         file_similarity[file_name] = (file_similarity[file_name] / total_sentences) * 100
 
-    # Фильтруем файлы, у которых процент заимствования меньше 1%
     file_similarity = {file: sim for file, sim in file_similarity.items() if sim > 1}
 
-    return overall_uniqueness, file_similarity, matched_indices
+    return overall_uniqueness, file_similarity, matched_sentences

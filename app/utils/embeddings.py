@@ -1,81 +1,80 @@
 import numpy as np
 from functools import lru_cache
-import spacy
-import torch
-from sentence_transformers import SentenceTransformer
+from typing import List, Dict, Union
+from .text_utils import split_text_into_sentences, split_text_into_chunks
+from .model_loader import model_loader
 
-# Глобальные переменные для ленивой загрузки тяжелых моделей
-# Используем паттерн Singleton для предотвращения повторной загрузки
-_nlp = None  # Экземпляр модели spaCy для обработки текста
-_model = None  # Экземпляр SentenceTransformer для генерации эмбеддингов
-
-
-def get_nlp():
-    """
-    Инициализирует и возвращает модель spaCy для русского языка.
-    Реализует ленивую загрузку - модель загружается только при первом вызове.
-
-    Returns:
-        spacy.Language: Загруженная модель NLP
-    """
-    global _nlp
-    if _nlp is None:
-        # Загружаем большую (lg) русскоязычную модель
-        _nlp = spacy.load("ru_core_news_lg")
-    return _nlp
-
-
-def get_model():
-    """
-    Инициализирует и возвращает модель SentenceTransformer.
-    Автоматически использует GPU (CUDA) если доступен.
-
-    Returns:
-        SentenceTransformer: Модель для генерации эмбеддингов
-    """
-    global _model
-    if _model is None:
-        # Определяем доступное вычислительное устройство
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        # Загружаем мультиязычную модель для парафразирования
-        _model = SentenceTransformer('paraphrase-xlm-r-multilingual-v1').to(device)
-    return _model
+model = model_loader.model
+tokenizer = model_loader.tokenizer
 
 
 @lru_cache(maxsize=128)
-def preprocess_text_to_embeddings(text: str, language: str) -> list[np.ndarray]:
+def preprocess_text_to_embeddings(text: str, language: str = "ru") -> List[np.ndarray]:
     """
-    Преобразует входной текст в список векторных представлений предложений.
-    Использует кэширование результатов для одинаковых входных текстов.
-
-    Args:
-        text (str): Исходный текст для обработки
-        language (str): Язык текста (не используется в текущей реализации)
-
-    Returns:
-        list[np.ndarray]: Список эмбеддингов для каждого предложения в тексте
+    Преобразует текст в эмбеддинги, автоматически разбивая длинные тексты.
     """
-    # Разбиваем текст на предложения с помощью spaCy
-    sentences = [sent.text.strip() for sent in get_nlp()(text).sents]
+    max_tokens = 512
 
-    # Генерируем эмбеддинги для каждого предложения
-    return [get_model().encode(sentence) for sentence in sentences]
+    tokens = tokenizer.tokenize(text)
+    if len(tokens) <= max_tokens:
+        sentences = split_text_into_sentences(text)
+        return [model.encode(sentence) for sentence in sentences]
+
+    chunks = split_text_into_chunks(text, max_tokens)
+    embeddings = []
+
+    for chunk in chunks:
+        chunk_sentences = split_text_into_sentences(chunk)
+        embeddings.extend([model.encode(sentence) for sentence in chunk_sentences])
+
+    return embeddings
 
 
-def load_embeddings_from_file(file_path: str) -> list[np.ndarray]:
+def load_embeddings_from_file(file_path: str) -> List[np.ndarray]:
     """
-    Загружает эмбеддинги из текстового файла, где каждая строка -
-    это вектор чисел, разделенных пробелами.
-
-    Args:
-        file_path (str): Путь к файлу с эмбеддингами
-
-    Returns:
-        list[np.ndarray]: Список загруженных векторов эмбеддингов
-
-    Пример формата файла:
-        0.1 0.2 0.3 ... 0.8
-        0.5 0.6 0.1 ... 0.9
+    Загружает эмбеддинги из текстового файла.
     """
     with open(file_path, 'r', encoding='utf-8') as file:
-        return [np.array(list(map(float, line.strip().split()))) for line in file]
+        return [np.array(list(map(float, line.strip().split()))) for line in file if line.strip()]
+
+
+def process_text_with_limits(text: str) -> Dict[str, Union[List[List[float]], Dict[str, int], List[str]]]:
+    """
+    Обрабатывает текст любого размера с полной информацией о разбиении.
+    """
+    original_token_count = len(tokenizer.tokenize(text))
+    max_tokens = 512
+    all_sentences = []
+
+    if original_token_count <= max_tokens:
+        sentences = split_text_into_sentences(text)
+        all_sentences.extend(sentences)
+        embeddings = [model.encode(sentence) for sentence in sentences]
+        return {
+            "embeddings": [emb.tolist() for emb in embeddings],
+            "sentences": all_sentences,
+            "processing_info": {
+                "total_chunks": 1,
+                "total_sentences": len(embeddings),
+                "was_truncated": False
+            }
+        }
+
+    chunks = split_text_into_chunks(text, max_tokens)
+    all_embeddings = []
+
+    for chunk in chunks:
+        chunk_sentences = split_text_into_sentences(chunk)
+        all_sentences.extend(chunk_sentences)
+        embeddings = [model.encode(sentence) for sentence in chunk_sentences]
+        all_embeddings.extend(embeddings)
+
+    return {
+        "embeddings": [emb.tolist() for emb in all_embeddings],
+        "sentences": all_sentences,
+        "processing_info": {
+            "total_chunks": len(chunks),
+            "total_sentences": len(all_embeddings),
+            "was_truncated": True
+        }
+    }

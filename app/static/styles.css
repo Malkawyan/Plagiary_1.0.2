@@ -4,6 +4,39 @@
             box-sizing: border-box;
         }
 
+        .editable-content {
+            font-family: "Times New Roman", Times, serif;
+            font-size: 13px;
+            line-height: 1;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            width: 100%;
+            background-color: #fff;
+            transition: border-color 0.3s ease;
+            min-height: 200px;
+            max-height: 500px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .editable-content:focus {
+            border-color: #e74c3c;
+            outline: none;
+        }
+
+        .editable-content:empty:before {
+            content: attr(placeholder);
+            color: #888;
+        }
+
+        /* Стиль для неуникальных предложений */
+        .non-unique {
+            color: red;
+            background-color: rgba(255, 0, 0, 0.1);
+        }
+
         body {
             font-family: 'Arial', sans-serif;
             background-color: #f5f5f5;
@@ -145,6 +178,23 @@
         .loading span {
             font-size: 18px;
             color: #e74c3c;
+        }
+
+        .highlighted-container {
+            background-color: white;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            margin-top: 20px;
+            overflow: auto;
+            max-height: 400px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        .non-unique {
+            color: red;
+            font-weight: bold;
         }
 
         @keyframes fadeIn {

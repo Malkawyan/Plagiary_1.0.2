@@ -18,6 +18,13 @@ def serve_html():
     logging.info("Отправка главной страницы интерфейса пользователю.")
     return send_from_directory(Config.STATIC_FOLDER, 'index.html')
 
+@main_routes.route('/<path:filename>')
+def serve_static(filename):
+    """
+    Обслуживает статические файлы из папки static
+    """
+    return send_from_directory(Config.STATIC_FOLDER, filename)
+
 @main_routes.route('/', methods=['POST'])
 def process_text_route():
     """
@@ -55,4 +62,3 @@ def process_text_route():
     except Exception as e:
         logging.error(f"Произошла ошибка при обработке текста: {e}")
         return jsonify({"error": "An error occurred"}), 500
-

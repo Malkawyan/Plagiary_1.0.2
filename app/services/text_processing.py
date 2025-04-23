@@ -1,10 +1,11 @@
 # Импорт необходимых модулей
 from functools import lru_cache  # Для кэширования результатов функций
 from pathlib import Path  # Для работы с путями файловой системы
-from app.utils.embeddings import preprocess_text_to_embeddings, load_embeddings_from_file
+from app.utils.embeddings import preprocess_text_to_embeddings, load_embeddings_from_file, process_text_with_limits
 from app.utils.similarity import calculate_uniqueness_and_similarity
 from app.utils.seo import calculate_spamminess, calculate_wateriness
 from app.config import Config  # Конфигурация приложения
+from app.utils.ai_text_detected import detect_ai_text
 
 
 @lru_cache(maxsize=32)  # Кэшируем результаты на 32 вызова для оптимизации
@@ -57,15 +58,20 @@ def process_text(text: str, language: str) -> dict:
     water_score = calculate_wateriness(text)  # Расчет водянистости
     spam_score = calculate_spamminess(text)  # Расчет спамности
 
-    # Преобразование текста в векторные представления
-    uploaded_embeddings = preprocess_text_to_embeddings(text, language)
+    #Аналтз текста на написание ИИ
+    ai_text_detected = detect_ai_text(text)
+
+    # Получаем и эмбеддинги, и список предложений
+    processed_data = process_text_with_limits(text)
+    uploaded_embeddings = processed_data["embeddings"]
+    sentences = processed_data["sentences"]
 
     # Получаем кэшированные эмбеддинги базы документов
     base_sentences = _get_base_sentences_cache()
 
     # Сравнение с базой документов
-    overall_uniqueness, file_similarity, matched_indices = calculate_uniqueness_and_similarity(
-        uploaded_embeddings, base_sentences
+    overall_uniqueness, file_similarity, matched_sentences = calculate_uniqueness_and_similarity(
+        uploaded_embeddings, base_sentences, sentences
     )
 
     # Формируем итоговый результат
@@ -74,5 +80,6 @@ def process_text(text: str, language: str) -> dict:
         "file_similarity": file_similarity,  # Сходство с конкретными файлами
         "water_score": water_score,  # Показатель водянистости
         "spam_score": spam_score,  # Показатель спамности
-        "matched_indices": matched_indices  # Индексы совпадений для подсветки
+        "matched_sentences": matched_sentences,  # Индексы совпадений для подсветки
+        "ai_text_detected" : ai_text_detected  # Процент предложений написанных ИИ
     }
