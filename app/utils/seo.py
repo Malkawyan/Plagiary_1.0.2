@@ -1,9 +1,10 @@
 from sentence_transformers import SentenceTransformer, util
+from .model_loader import model_loader
 import torch
 
 # Загружаем предобученную модель
 device = "cuda" if torch.cuda.is_available() else "cpu"
-model = SentenceTransformer('paraphrase-xlm-r-multilingual-v1').to(device)
+model = model_loader.model
 
 # Эталонные примеры
 normal_text = "Это обычный информативный текст без лишних слов и повторов."

@@ -241,3 +241,7 @@
                 font-size: 14px;
             }
         }
+        #output {
+            border: 2px solid red !important;
+            padding: 20px !important;
+        }
