@@ -2,11 +2,12 @@ import { MESSAGES } from './constants.js';
 import { TextProcessor } from './text_processor.js';
 
 export class UIUpdater {
-    constructor(resultsDiv, uniResultsDiv, seoResultsDiv, contentDiv) {
+    constructor(resultsDiv, uniResultsDiv, seoResultsDiv, contentDiv, aiResultsDiv) {
         this.resultsDiv = resultsDiv;
         this.uniResultsDiv = uniResultsDiv;
         this.seoResultsDiv = seoResultsDiv;
         this.contentDiv = contentDiv;
+        this.aiResultsDiv = aiResultsDiv;
     }
 
     updateLoadingState(isLoading) {
@@ -18,6 +19,13 @@ export class UIUpdater {
     }
 
     displayResults(data) {
+
+        console.log("[DEBUG] AI Detection Data:", {
+            received: data.hasOwnProperty('ai_text_detected'),
+            value: data.ai_text_detected,
+            type: typeof data.ai_text_detected
+        });
+
         const uniqueness = parseFloat(data.overall_uniqueness);
         const color = TextProcessor.getUniquenessColor(uniqueness);
 
@@ -43,6 +51,29 @@ export class UIUpdater {
             <p>Спамность: ${data.spam_score}%</p>
             <p>Водянистость: ${data.water_score}%</p>
         `;
+
+        /// Блок ИИ-анализа
+        if (data.ai_text_detected !== undefined) {
+            const aiPercent = typeof data.ai_text_detected === 'string'
+                ? parseFloat(data.ai_text_detected.replace('%', ''))
+                : data.ai_text_detected;
+
+            this.aiResultsDiv.innerHTML = `
+                <div class="ai-detection-result">
+                    <h4>Анализ ИИ-текста</h4>
+                    <div class="ai-meter">
+                        <div class="ai-meter-fill"
+                             style="width: ${aiPercent}%;
+                                    background: ${this.getAiColor(aiPercent)};">
+                        </div>
+                    </div>
+                    <p class="ai-percentage">${aiPercent}% вероятность ИИ-генерации</p>
+                </div>
+            `;
+        } else {
+            this.aiResultsDiv.innerHTML = `<p class="ai-error">Данные анализа ИИ недоступны</p>`;
+        }
+
     }
 
     updatePlagiarismResults(data) {
@@ -69,5 +100,12 @@ export class UIUpdater {
     displayError(error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         this.resultsDiv.innerHTML = `Ошибка: ${errorMessage}`;
+    }
+
+    getAiColor(percent) {
+        percent = parseFloat(percent);
+        if (percent < 30) return '#4CAF50'; // Зелёный
+        if (percent < 70) return '#FFC107'; // Жёлтый
+        return '#f44336'; // Красный
     }
 }

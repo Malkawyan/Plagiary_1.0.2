@@ -17,6 +17,8 @@ export class AntiPlagiarismApp {
         this.fileInput = document.getElementById('file-input');
         this.uniResultsDiv = document.getElementById('uni-results');
         this.seoResultsDiv = document.getElementById('seo-results');
+        this.aiResultsDiv = document.getElementById('ai-results');
+            if (!this.aiResultsDiv) console.error('Элемент #ai-results не найден!');
 
         // Инициализация компонентов
         this.fileHandler = new FileHandler(this.contentDiv, this.statusDiv);
@@ -24,7 +26,8 @@ export class AntiPlagiarismApp {
             this.resultsDiv,
             this.uniResultsDiv,
             this.seoResultsDiv,
-            this.contentDiv
+            this.contentDiv,
+            this.aiResultsDiv
         );
         this.apiService = new ApiService(this.uiUpdater);
 
