@@ -1,5 +1,6 @@
 import { MESSAGES } from './constants.js';
 import { TextProcessor } from './text_processor.js';
+import { SPELLING_MESSAGES } from './constants.js';
 
 export class UIUpdater {
     constructor(resultsDiv, uniResultsDiv, seoResultsDiv, contentDiv, aiResultsDiv) {
@@ -11,52 +12,84 @@ export class UIUpdater {
     }
 
     updateLoadingState(isLoading) {
+        const loadingElement = document.getElementById('loading');
         if (isLoading) {
+            // Показать анимацию загрузки
+            loadingElement.style.display = 'block';
             this.resultsDiv.innerHTML = MESSAGES.LOADING;
         } else {
-            this.resultsDiv.innerHTML = MESSAGES.DEFAULT_RESULTS;
+            // Скрыть анимацию загрузки, но НЕ сбрасывать содержимое resultsDiv
+            loadingElement.style.display = 'none';
         }
     }
 
-    displayResults(data) {
+    displaySpellingResults(errors) {
+        const spellingColumn = document.querySelector('.info-column:nth-child(2) .output-container');
 
-        console.log("[DEBUG] AI Detection Data:", {
-            received: data.hasOwnProperty('ai_text_detected'),
-            value: data.ai_text_detected,
-            type: typeof data.ai_text_detected
-        });
-
-        const uniqueness = parseFloat(data.overall_uniqueness);
-        const color = TextProcessor.getUniquenessColor(uniqueness);
-
-        // Обновление блока с уникальностью
-        this.uniResultsDiv.innerHTML = `Уникальность: ${uniqueness}%`;
-        this.uniResultsDiv.style.color = color;
-        this.resultsDiv.style.color = color;
-
-        // Подсветка неуникальных фрагментов в тексте
-        if (data.matched_sentences && data.matched_sentences.length > 0) {
-            this.contentDiv.innerHTML = TextProcessor.highlightNonUniqueText(
-                this.contentDiv.textContent,
-                data.matched_sentences
-            );
+        if (!errors || errors.length === 0) {
+            spellingColumn.innerHTML = `<p>${SPELLING_MESSAGES.NO_ERRORS}</p>`;
+            return;
         }
 
-        console.log('API Response:', data);
-        // Обновляем результаты плагиата
-        this.updatePlagiarismResults(data);
+        let html = `<h4>${SPELLING_MESSAGES.ERRORS_FOUND}</h4><div class="spelling-list">`;
 
-        // Обновление SEO-анализа
+        errors.forEach(error => {
+            html += `
+                <div class="spelling-item">
+                    <span class="spelling-word">${error.word}</span>:
+                    ${error.message}. ${SPELLING_MESSAGES.SUGGESTIONS} ${error.replacements.join(', ')}
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        spellingColumn.innerHTML = html;
+    }
+
+    displayResults(data) {
+        console.log("Полученные данные:", data); // Для отладки
+
+        // 1. Обновляем блок с уникальностью (uni-results)
+        const uniqueness = parseFloat(data.overall_uniqueness).toFixed(2);
+        const color = TextProcessor.getUniquenessColor(uniqueness);
+        this.uniResultsDiv.innerHTML = `Уникальность: ${uniqueness}%`;
+        this.uniResultsDiv.style.color = color;
+
+        // 2. Основной блок результатов (output) - информация о заимствованиях
+        let outputHTML = '<h3>Результаты проверки на заимствования</h3>';
+
+        if (data.file_similarity && Object.keys(data.file_similarity).length > 0) {
+            outputHTML += '<h4>Найдены совпадения в файлах:</h4><ul>';
+
+            for (const [filename, similarity] of Object.entries(data.file_similarity)) {
+                // Округляем проценты совпадений до двух знаков после запятой
+                const roundedSimilarity = parseFloat(similarity).toFixed(2);
+                outputHTML += `<li>${filename}: ${roundedSimilarity}% совпадений</li>`;
+            }
+
+            outputHTML += '</ul>';
+        } else {
+            outputHTML += '<p>Прямые заимствования не обнаружены</p>';
+        }
+
+        this.resultsDiv.innerHTML = outputHTML;
+
+        // 3. SEO-анализ (seo-results)
+        const spamScore = parseFloat(data.spam_score).toFixed(2);
+        const waterScore = parseFloat(data.water_score).toFixed(2);
         this.seoResultsDiv.innerHTML = `
-            <p>Спамность: ${data.spam_score}%</p>
-            <p>Водянистость: ${data.water_score}%</p>
+            <p>Спамность: ${spamScore}%</p>
+            <p>Водянистость: ${waterScore}%</p>
         `;
 
-        /// Блок ИИ-анализа
+        // 4. ИИ-анализ (ai-results)
         if (data.ai_text_detected !== undefined) {
-            const aiPercent = typeof data.ai_text_detected === 'string'
+            let aiPercent = typeof data.ai_text_detected === 'string'
                 ? parseFloat(data.ai_text_detected.replace('%', ''))
                 : data.ai_text_detected;
+
+            // Округляем до двух знаков после запятой
+            aiPercent = parseFloat(aiPercent).toFixed(2);
 
             this.aiResultsDiv.innerHTML = `
                 <div class="ai-detection-result">
@@ -74,28 +107,30 @@ export class UIUpdater {
             this.aiResultsDiv.innerHTML = `<p class="ai-error">Данные анализа ИИ недоступны</p>`;
         }
 
-    }
+        // 5. Проверка орфографии
+        if (data.spelling_errors) {
+            this.displaySpellingResults(data.spelling_errors);
 
-    updatePlagiarismResults(data) {
-            console.log('[DEBUG] updatePlagiarismResults called with data:', data);
-
-            if (!this.resultsDiv) {
-                console.error('resultsDiv is not defined!');
-                return;
-            }
-
-            console.log('Current resultsDiv content:', this.resultsDiv.innerHTML);
-
-            let resultsHTML = '<h3>Результаты проверки:</h3>';
-
-            if (data.file_similarity) {
-                console.log('file_similarity exists:', data.file_similarity);
-            } else {
-                console.log('file_similarity is MISSING in response');
-            }
-
-            this.resultsDiv.insertAdjacentHTML('beforeend', resultsHTML);
+            // Подсветка ошибок в тексте
+            this.contentDiv.innerHTML = this.highlightSpellingErrors(
+                this.contentDiv.textContent,
+                data.spelling_errors
+            );
+        } else {
+            const spellingColumn = document.querySelector('.info-column:nth-child(2) .output-container');
+            spellingColumn.innerHTML = `<p>${SPELLING_MESSAGES.NO_ERRORS}</p>`;
         }
+
+        // 6. Подсветка текста (если нужно)
+        if (data.matched_sentences && data.matched_sentences.length > 0) {
+            const currentContent = this.contentDiv.innerHTML; // Сохраняем уже подсвеченные орф. ошибки
+            this.contentDiv.innerHTML = TextProcessor.highlightNonUniqueText(
+                this.contentDiv.textContent,
+                data.matched_sentences
+            );
+        }
+
+    }
 
     displayError(error) {
         const errorMessage = error instanceof Error ? error.message : String(error);

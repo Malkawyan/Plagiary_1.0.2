@@ -6,7 +6,7 @@
 
         .editable-content {
             font-family: "Times New Roman", Times, serif;
-            font-size: 13px;
+            font-size: 12px;
             line-height: 1;
             padding: 15px;
             border: 1px solid #ccc;
@@ -283,4 +283,40 @@
             height: 100%;
             background-color: #ff6b6b;
             transition: width 0.3s ease;
+        }
+
+        .spelling-error {
+            background-color: rgba(255, 0, 0, 0.2);
+            border-bottom: 1px dashed red;
+            cursor: help;
+            position: relative;
+        }
+
+        .spelling-error:hover::after {
+            content: attr(data-suggestions);
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            background: white;
+            border: 1px solid #ccc;
+            padding: 5px;
+            border-radius: 4px;
+            white-space: nowrap;
+            z-index: 100;
+        }
+
+        .spelling-list {
+            margin-top: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .spelling-item {
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .spelling-word {
+            color: red;
+            font-weight: bold;
         }

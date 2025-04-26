@@ -6,6 +6,9 @@ from app.utils.similarity import calculate_uniqueness_and_similarity
 from app.utils.seo import calculate_spamminess, calculate_wateriness
 from app.config import Config  # Конфигурация приложения
 from app.utils.ai_text_detected import detect_ai_text
+from app.utils.spell_checker import init_spell_checker, check_text
+
+spell_checker_tool = init_spell_checker()
 
 
 @lru_cache(maxsize=32)  # Кэшируем результаты на 32 вызова для оптимизации
@@ -66,6 +69,9 @@ def process_text(text: str, language: str) -> dict:
     uploaded_embeddings = processed_data["embeddings"]
     sentences = processed_data["sentences"]
 
+    # Проверка орфографии
+    #spelling_errors = check_text(text, spell_checker_tool)
+
     # Получаем кэшированные эмбеддинги базы документов
     base_sentences = _get_base_sentences_cache()
 
@@ -81,5 +87,6 @@ def process_text(text: str, language: str) -> dict:
         "water_score": water_score,  # Показатель водянистости
         "spam_score": spam_score,  # Показатель спамности
         "matched_sentences": matched_sentences,  # Индексы совпадений для подсветки
-        "ai_text_detected" : ai_text_detected  # Процент предложений написанных ИИ
+        "ai_text_detected" : ai_text_detected,  # Процент предложений написанных ИИ
+        #"spelling_errors": spelling_errors #Проверка орфографии
     }

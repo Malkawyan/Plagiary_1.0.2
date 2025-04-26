@@ -29,3 +29,9 @@ export const MESSAGES = {
     CHECK_CANCELED: 'Статус: Проверка отменена.',
     FILE_PROCESSING_ERROR: 'Ошибка при обработке файла:'
 };
+
+export const SPELLING_MESSAGES = {
+    NO_ERRORS: "Орфографических ошибок не найдено",
+    ERRORS_FOUND: "Найдены орфографические ошибки:",
+    SUGGESTIONS: "Возможные исправления:"
+};
