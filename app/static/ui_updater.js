@@ -24,26 +24,43 @@ export class UIUpdater {
     }
 
     displaySpellingResults(errors) {
-        const spellingColumn = document.querySelector('.info-column:nth-child(2) .output-container');
+        const spellingColumn = document.getElementById('spell-results');
 
         if (!errors || errors.length === 0) {
-            spellingColumn.innerHTML = `<p>${SPELLING_MESSAGES.NO_ERRORS}</p>`;
+            spellingColumn.innerHTML = `<p style="font-family: 'Times New Roman', Times, serif; font-size: 11px;">${SPELLING_MESSAGES.NO_ERRORS}</p>`;
             return;
         }
 
-        let html = `<h4>${SPELLING_MESSAGES.ERRORS_FOUND}</h4><div class="spelling-list">`;
+        let html = `<div style="font-family: 'Times New Roman', Times, serif; font-size: 11px;">`;
 
-        errors.forEach(error => {
-            html += `
-                <div class="spelling-item">
-                    <span class="spelling-word">${error.word}</span>:
-                    ${error.message}. ${SPELLING_MESSAGES.SUGGESTIONS} ${error.replacements.join(', ')}
-                </div>
-            `;
+        // Собираем только уникальные слова с ошибками
+        const uniqueErrorWords = [...new Set(errors.map(error => error.word))];
+
+        uniqueErrorWords.forEach(word => {
+            html += `<span style="color: red;">${word}</span> `;
         });
 
         html += '</div>';
         spellingColumn.innerHTML = html;
+    }
+
+    highlightSpellingErrors(text, errors) {
+        if (!errors || errors.length === 0) return text;
+
+        // Сортируем в обратном порядке для корректной вставки
+        const sortedErrors = [...errors].sort((a, b) => b.offset - a.offset);
+
+        let result = text;
+        for (const error of sortedErrors) {
+            const start = error.offset;
+            const end = start + error.length;
+            const errorWord = result.slice(start, end);
+
+            const highlighted = `<span style="color: red;">${errorWord}</span>`;
+            result = result.slice(0, start) + highlighted + result.slice(end);
+        }
+
+        return result;
     }
 
     displayResults(data) {

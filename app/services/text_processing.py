@@ -70,7 +70,7 @@ def process_text(text: str, language: str) -> dict:
     sentences = processed_data["sentences"]
 
     # Проверка орфографии
-    #spelling_errors = check_text(text, spell_checker_tool)
+    spelling_errors = check_text(text, spell_checker_tool)
 
     # Получаем кэшированные эмбеддинги базы документов
     base_sentences = _get_base_sentences_cache()
@@ -88,5 +88,5 @@ def process_text(text: str, language: str) -> dict:
         "spam_score": spam_score,  # Показатель спамности
         "matched_sentences": matched_sentences,  # Индексы совпадений для подсветки
         "ai_text_detected" : ai_text_detected,  # Процент предложений написанных ИИ
-        #"spelling_errors": spelling_errors #Проверка орфографии
+        "spelling_errors": spelling_errors #Проверка орфографии
     }

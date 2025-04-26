@@ -2,6 +2,7 @@ from language_tool_python import LanguageTool
 from typing import List, Dict, Union
 import logging
 
+logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
 def init_spell_checker(language='ru-RU'):
     """Инициализирует и возвращает экземпляр LanguageTool"""
