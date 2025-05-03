@@ -53,7 +53,7 @@ class ModelLoader:
         if self._ai_detector_model is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             self._ai_detector_model = AutoModelForSequenceClassification.from_pretrained(
-                "yaya36095/text-detector"
+                "roberta-base-openai-detector"
             ).to(device)
         return self._ai_detector_model
 
@@ -61,8 +61,8 @@ class ModelLoader:
     def ai_detector_tokenizer(self):
         """Инициализирует и возвращает токенизатор для модели детекции AI-текста."""
         if self._ai_detector_tokenizer is None:
-            self._ai_detector_tokenizer = XLMRobertaTokenizer.from_pretrained(
-                "yaya36095/text-detector"
+            self._ai_detector_tokenizer = AutoTokenizer.from_pretrained(
+                "roberta-base-openai-detector"
             )
         return self._ai_detector_tokenizer
 
