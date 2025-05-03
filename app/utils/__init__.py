@@ -3,6 +3,7 @@ from .similarity import calculate_similarity_matrix, calculate_uniqueness_and_si
 from .seo import calculate_spamminess, calculate_wateriness
 from .ai_text_detected import detect_ai_text
 from .text_utils import split_text_into_sentences, split_text_into_chunks
+from .spell_checker import check_grammar_errors
 
 # Экспортируем функции для удобного импорта
 __all__ = [
@@ -12,5 +13,6 @@ __all__ = [
     "calculate_uniqueness_and_similarity",
     "calculate_spamminess",
     "calculate_wateriness",
-    "detect_ai_text"
+    "detect_ai_text",
+    "check_grammar_errors"
 ]

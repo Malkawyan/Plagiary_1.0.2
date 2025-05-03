@@ -6,7 +6,7 @@ from app.utils.similarity import calculate_uniqueness_and_similarity
 from app.utils.seo import calculate_spamminess, calculate_wateriness
 from app.config import Config  # Конфигурация приложения
 from app.utils.ai_text_detected import detect_ai_text
-from app.utils.spell_checker import init_spell_checker, check_text
+from app.utils.spell_checker import init_spell_checker, check_grammar_errors as check_text
 
 spell_checker_tool = init_spell_checker()
 
@@ -61,7 +61,7 @@ def process_text(text: str, language: str) -> dict:
     water_score = calculate_wateriness(text)  # Расчет водянистости
     spam_score = calculate_spamminess(text)  # Расчет спамности
 
-    #Аналтз текста на написание ИИ
+    #Анализ текста на написание ИИ
     ai_text_detected = detect_ai_text(text)
 
     # Получаем и эмбеддинги, и список предложений
