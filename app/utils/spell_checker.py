@@ -47,11 +47,12 @@ def check_grammar_errors(text: str, tool: LanguageTool) -> List[Dict[str, Union[
 
 def highlight_grammar_errors_in_html(text: str, errors: List[Dict]) -> str:
     """
-    Добавляет HTML-разметку для подсветки только грамматических ошибок.
+    Добавляет HTML-разметку для подсветки только слов с грамматическими ошибками.
     """
     if not errors:
         return text
 
+    # Сортируем ошибки в обратном порядке, чтобы не сбивались индексы
     for error in sorted(errors, key=lambda x: x['offset'], reverse=True):
         start = error['offset']
         end = start + error['length']
@@ -60,16 +61,42 @@ def highlight_grammar_errors_in_html(text: str, errors: List[Dict]) -> str:
         # Безопасное получение описания правила
         rule_desc = error.get('rule_description', 'Неизвестное правило')
 
+        # Формируем подсказку с вариантами замены
+        replacements_text = ", ".join(error["replacements"][:3]) if error["replacements"] else "нет вариантов"
+
         highlighted = (
             f'<span class="grammar-error" style="background-color: #ffcccc;" title="'
-            f'Грамматическая ошибка: {error["message"]}. '
+            f'Ошибка: {error["message"]}. '
             f'Правило: {rule_desc}. '
-            f'Варианты исправления: {", ".join(error["replacements"][:3])}">'
+            f'Исправления: {replacements_text}">'
             f'{error_word}</span>'
         )
         text = text[:start] + highlighted + text[end:]
 
     return text
+
+
+def format_grammar_errors_list(errors: List[Dict]) -> str:
+    """
+    Формирует HTML-список с найденными грамматическими ошибками.
+    """
+    if not errors:
+        return "<p>Грамматических ошибок не обнаружено.</p>"
+
+    result = '<div class="grammar-list">'
+    for i, error in enumerate(errors, 1):
+        replacements = ", ".join(error["replacements"][:3]) if error["replacements"] else "нет вариантов"
+        rule_desc = error.get('rule_description', 'Неизвестное правило')
+
+        result += f'''
+        <div class="grammar-item">
+            <span class="grammar-word">{error['word']}</span>: {error['message']}
+            <br>Правило: {rule_desc}
+            <br>Варианты: {replacements}
+        </div>
+        '''
+    result += '</div>'
+    return result
 
 
 # Для обратной совместимости
