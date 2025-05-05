@@ -90,24 +90,9 @@ export class AntiPlagiarismApp {
                 const viewType = column.getAttribute('data-view');
                 if (viewType) {
                     this.uiUpdater.switchView(viewType);
-                    this.highlightActiveColumn(column);
                 }
             });
         });
-    }
-
-    /**
-     * Выделяет активную колонку и снимает выделение с остальных
-     * @param {HTMLElement} activeColumn - Активная колонка
-     */
-    highlightActiveColumn(activeColumn) {
-        // Сначала снимаем выделение со всех колонок
-        this.infoColumns.forEach(column => {
-            column.style.border = '1px solid #ccc';
-        });
-
-        // Затем выделяем активную колонку
-        activeColumn.style.border = '2px solid #e74c3c';
     }
 }
 
