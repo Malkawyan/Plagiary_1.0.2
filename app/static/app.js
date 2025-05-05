@@ -18,7 +18,12 @@ export class AntiPlagiarismApp {
         this.uniResultsDiv = document.getElementById('uni-results');
         this.seoResultsDiv = document.getElementById('seo-results');
         this.aiResultsDiv = document.getElementById('ai-results');
-            if (!this.aiResultsDiv) console.error('Элемент #ai-results не найден!');
+        this.spellResultsDiv = document.getElementById('spell-results');
+
+        if (!this.aiResultsDiv) console.error('Элемент #ai-results не найден!');
+
+        // Получаем ссылки на все колонки с типами анализа
+        this.infoColumns = document.querySelectorAll('.info-column');
 
         // Инициализация компонентов
         this.fileHandler = new FileHandler(this.contentDiv, this.statusDiv);
@@ -69,6 +74,40 @@ export class AntiPlagiarismApp {
         this.cancelButton.addEventListener('click', () => {
             this.apiService.cancelRequest();
         });
+
+        // Обработчики для колонок с типами анализа
+        this.setupInfoColumnClickHandlers();
+    }
+
+    /**
+     * Устанавливает обработчики нажатия на колонки с типами анализа
+     */
+    setupInfoColumnClickHandlers() {
+        // Настраиваем обработчики для всех колонок
+        this.infoColumns.forEach(column => {
+            column.addEventListener('click', () => {
+                // Получаем тип представления из атрибута data-view
+                const viewType = column.getAttribute('data-view');
+                if (viewType) {
+                    this.uiUpdater.switchView(viewType);
+                    this.highlightActiveColumn(column);
+                }
+            });
+        });
+    }
+
+    /**
+     * Выделяет активную колонку и снимает выделение с остальных
+     * @param {HTMLElement} activeColumn - Активная колонка
+     */
+    highlightActiveColumn(activeColumn) {
+        // Сначала снимаем выделение со всех колонок
+        this.infoColumns.forEach(column => {
+            column.style.border = '1px solid #ccc';
+        });
+
+        // Затем выделяем активную колонку
+        activeColumn.style.border = '2px solid #e74c3c';
     }
 }
 

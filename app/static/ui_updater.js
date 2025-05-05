@@ -9,6 +9,8 @@ export class UIUpdater {
         this.seoResultsDiv = seoResultsDiv;
         this.contentDiv = contentDiv;
         this.aiResultsDiv = aiResultsDiv;
+        this.data = null; // Сохраняем данные последнего ответа
+        this.currentView = 'all'; // По умолчанию показываем все результаты
     }
 
     updateLoadingState(isLoading) {
@@ -63,8 +65,68 @@ export class UIUpdater {
         return result;
     }
 
+    // Новый метод для переключения вида отображения
+    switchView(viewType) {
+        this.currentView = viewType;
+
+        // Если у нас есть данные, то обновляем отображение текста
+        if (this.data) {
+            this.updateTextDisplay();
+        }
+    }
+
+    // Обновление отображения текста в зависимости от выбранного вида
+    updateTextDisplay() {
+        // Сначала сбрасываем текст к оригинальному
+        const originalText = this.contentDiv.textContent;
+
+        // В зависимости от текущего вида, применяем разные подсветки
+        if (this.currentView === 'uniqueness') {
+            // Только подсветка заимствований
+            if (this.data.matched_sentences && this.data.matched_sentences.length > 0) {
+                this.contentDiv.innerHTML = TextProcessor.highlightNonUniqueText(
+                    originalText, this.data.matched_sentences
+                );
+            } else {
+                this.contentDiv.innerHTML = originalText;
+            }
+        } else if (this.currentView === 'spelling') {
+            // Только подсветка орфографических ошибок
+            if (this.data.spelling_errors) {
+                this.contentDiv.innerHTML = this.highlightSpellingErrors(
+                    originalText, this.data.spelling_errors
+                );
+            } else {
+                this.contentDiv.innerHTML = originalText;
+            }
+        } else if (this.currentView === 'all') {
+            // Полная подсветка - сначала заимствования, потом орфография
+            let processedText = originalText;
+
+            if (this.data.matched_sentences && this.data.matched_sentences.length > 0) {
+                processedText = TextProcessor.highlightNonUniqueText(
+                    processedText, this.data.matched_sentences
+                );
+            }
+
+            if (this.data.spelling_errors) {
+                processedText = this.highlightSpellingErrors(
+                    processedText, this.data.spelling_errors
+                ).replace(/&lt;/g, '<').replace(/&gt;/g, '>'); // Восстанавливаем HTML-теги после экранирования
+            }
+
+            this.contentDiv.innerHTML = processedText;
+        } else {
+            // Для других случаев (SEO, AI) - просто текст без подсветок
+            this.contentDiv.innerHTML = originalText;
+        }
+    }
+
     displayResults(data) {
         console.log("Полученные данные:", data); // Для отладки
+
+        // Сохраняем данные для последующего переключения режимов
+        this.data = data;
 
         // 1. Обновляем блок с уникальностью (uni-results)
         const uniqueness = parseFloat(data.overall_uniqueness).toFixed(2);
@@ -127,26 +189,13 @@ export class UIUpdater {
         // 5. Проверка орфографии
         if (data.spelling_errors) {
             this.displaySpellingResults(data.spelling_errors);
-
-            // Подсветка ошибок в тексте
-            this.contentDiv.innerHTML = this.highlightSpellingErrors(
-                this.contentDiv.textContent,
-                data.spelling_errors
-            );
         } else {
-            const spellingColumn = document.querySelector('.info-column:nth-child(2) .output-container');
+            const spellingColumn = document.getElementById('spell-results');
             spellingColumn.innerHTML = `<p>${SPELLING_MESSAGES.NO_ERRORS}</p>`;
         }
 
-        // 6. Подсветка текста (если нужно)
-        if (data.matched_sentences && data.matched_sentences.length > 0) {
-            const currentContent = this.contentDiv.innerHTML; // Сохраняем уже подсвеченные орф. ошибки
-            this.contentDiv.innerHTML = TextProcessor.highlightNonUniqueText(
-                this.contentDiv.textContent,
-                data.matched_sentences
-            );
-        }
-
+        // Отображаем текст в соответствии с текущим выбранным режимом
+        this.updateTextDisplay();
     }
 
     displayError(error) {
