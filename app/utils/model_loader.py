@@ -1,7 +1,7 @@
 import spacy
 import torch
 from sentence_transformers import SentenceTransformer
-from transformers import AutoTokenizer,  AutoModelForSequenceClassification, XLMRobertaTokenizer
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from typing import Optional
 
 
