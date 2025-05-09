@@ -19,6 +19,14 @@ class ModelLoader:
             cls._instance._tokenizer = None
             cls._instance._ai_detector_model = None
             cls._instance._ai_detector_tokenizer = None
+
+            # Добавляем модели для определения ChatGPT-4
+            cls._instance._chatgpt4_detector_model = None
+            cls._instance._chatgpt4_detector_tokenizer = None
+
+            # Добавляем модели для определения DeepSeek
+            cls._instance._deepseek_detector_model = None
+            cls._instance._deepseek_detector_tokenizer = None
         return cls._instance
 
     @property
@@ -65,6 +73,48 @@ class ModelLoader:
                 "roberta-base-openai-detector"
             )
         return self._ai_detector_tokenizer
+
+    @property
+    def chatgpt4_detector_model(self):
+        """Инициализирует и возвращает модель для детекции текста ChatGPT-4."""
+        if self._chatgpt4_detector_model is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            # Используем специализированную модель для определения ChatGPT-4
+            # Обратите внимание, что нужно будет заменить путь на актуальную модель
+            self._chatgpt4_detector_model = AutoModelForSequenceClassification.from_pretrained(
+                "chatgpt4-detector-model-path"  # Заменить на реальный путь к модели
+            ).to(device)
+        return self._chatgpt4_detector_model
+
+    @property
+    def chatgpt4_detector_tokenizer(self):
+        """Инициализирует и возвращает токенизатор для модели детекциии ChatGPT-4."""
+        if self._chatgpt4_detector_tokenizer is None:
+            self._chatgpt4_detector_tokenizer = AutoTokenizer.from_pretrained(
+                "chatgpt4-detector-model-path"  # Заменить на реальный путь к модели
+            )
+        return self._chatgpt4_detector_tokenizer
+
+    @property
+    def deepseek_detector_model(self):
+        """Инициализирует и возвращает модель для детекции текста DeepSeek."""
+        if self._deepseek_detector_model is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            # Используем специализированную модель для определения DeepSeek
+            # Обратите внимание, что нужно будет заменить путь на актуальную модель
+            self._deepseek_detector_model = AutoModelForSequenceClassification.from_pretrained(
+                "deepseek-detector-model-path"  # Заменить на реальный путь к модели
+            ).to(device)
+        return self._deepseek_detector_model
+
+    @property
+    def deepseek_detector_tokenizer(self):
+        """Инициализирует и возвращает токенизатор для модели детекции DeepSeek."""
+        if self._deepseek_detector_tokenizer is None:
+            self._deepseek_detector_tokenizer = AutoTokenizer.from_pretrained(
+                "deepseek-detector-model-path"  # Заменить на реальный путь к модели
+            )
+        return self._deepseek_detector_tokenizer
 
 
 model_loader = ModelLoader()
