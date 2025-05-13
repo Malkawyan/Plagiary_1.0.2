@@ -33,10 +33,11 @@ export class UIUpdater {
 
         let html = `<div style="font-family: 'Times New Roman', Times, serif; font-size: 11px;">`;
 
-        const uniqueErrorWords = [...new Set(errors.map(error => error.word))];
-
-        uniqueErrorWords.forEach(word => {
-            html += `<span style="color: red;">${word}</span> `;
+        // Вместо отображения только уникальных слов с ошибками,
+        // показываем все слова с ошибками, как в методе highlightSpellingErrors
+        errors.forEach(error => {
+            const errorWord = this.contentDiv.textContent.slice(error.offset, error.offset + error.length);
+            html += `<span style="color: red;">${errorWord}</span> `;
         });
 
         html += '</div>';
