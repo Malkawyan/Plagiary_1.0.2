@@ -534,3 +534,49 @@ body {
     font-size: 12px;
   }
 }
+
+.stylistic-features {
+    margin-top: 15px;
+    padding: 12px;
+    background-color: rgba(0, 0, 0, 0.02);
+    border-radius: 8px;
+    border-left: 3px solid var(--accent-color);
+}
+
+.stylistic-features h4 {
+    margin-bottom: 10px;
+    color: var(--primary-color);
+}
+
+.stylistic-features p {
+    margin: 5px 0;
+    font-size: 14px;
+}
+
+.confidence-level {
+    font-style: italic;
+    margin-top: 10px;
+    color: var(--text-color);
+    opacity: 0.8;
+}
+
+.ai-detection-chunks {
+    margin-top: 20px;
+}
+
+.chunk-item {
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+.chunk-score {
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+.chunk-text {
+    font-size: 14px;
+    margin-top: 5px;
+}

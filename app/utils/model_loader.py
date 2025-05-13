@@ -17,16 +17,8 @@ class ModelLoader:
             cls._instance._nlp = None
             cls._instance._model = None
             cls._instance._tokenizer = None
-            cls._instance._ai_detector_model = None
-            cls._instance._ai_detector_tokenizer = None
-
-            # Добавляем модели для определения ChatGPT-4
-            cls._instance._chatgpt4_detector_model = None
-            cls._instance._chatgpt4_detector_tokenizer = None
-
-            # Добавляем модели для определения DeepSeek
-            cls._instance._deepseek_detector_model = None
-            cls._instance._deepseek_detector_tokenizer = None
+            cls._instance._models = {}
+            cls._instance._tokenizers = {}
         return cls._instance
 
     @property
@@ -57,64 +49,62 @@ class ModelLoader:
 
     @property
     def ai_detector_model(self):
-        """Инициализирует и возвращает модель для детекции AI-текста."""
-        if self._ai_detector_model is None:
+        """Современная модель для детекции AI-текста с поддержкой новых моделей"""
+        if 'ai_detector' not in self._models:
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            self._ai_detector_model = AutoModelForSequenceClassification.from_pretrained(
-                "roberta-base-openai-detector"
+            model_name = "roberta-base-openai-detector"
+            self._models['ai_detector'] = AutoModelForSequenceClassification.from_pretrained(
+                model_name
             ).to(device)
-        return self._ai_detector_model
+        return self._models['ai_detector']
 
     @property
     def ai_detector_tokenizer(self):
-        """Инициализирует и возвращает токенизатор для модели детекции AI-текста."""
-        if self._ai_detector_tokenizer is None:
-            self._ai_detector_tokenizer = AutoTokenizer.from_pretrained(
-                "roberta-base-openai-detector"
-            )
-        return self._ai_detector_tokenizer
+        """Токенизатор для современной модели детекции"""
+        if 'ai_detector' not in self._tokenizers:
+            model_name = "roberta-base-openai-detector"
+            self._tokenizers['ai_detector'] = AutoTokenizer.from_pretrained(model_name)
+        return self._tokenizers['ai_detector']
 
     @property
-    def chatgpt4_detector_model(self):
-        """Инициализирует и возвращает модель для детекции текста ChatGPT-4."""
-        if self._chatgpt4_detector_model is None:
+    def multilingual_detector_model(self):
+        """Мультиязычная модель для детекции"""
+        if 'multilingual_detector' not in self._models:
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            # Используем специализированную модель для определения ChatGPT-4
-            # Обратите внимание, что нужно будет заменить путь на актуальную модель
-            self._chatgpt4_detector_model = AutoModelForSequenceClassification.from_pretrained(
-                "chatgpt4-detector-model-path"  # Заменить на реальный путь к модели
+            model_name = "Hello-SimpleAI/chatgpt-detector-roberta"
+            self._models['multilingual_detector'] = AutoModelForSequenceClassification.from_pretrained(
+                model_name,
+                num_labels=2
             ).to(device)
-        return self._chatgpt4_detector_model
+        return self._models['multilingual_detector']
 
     @property
-    def chatgpt4_detector_tokenizer(self):
-        """Инициализирует и возвращает токенизатор для модели детекциии ChatGPT-4."""
-        if self._chatgpt4_detector_tokenizer is None:
-            self._chatgpt4_detector_tokenizer = AutoTokenizer.from_pretrained(
-                "chatgpt4-detector-model-path"  # Заменить на реальный путь к модели
-            )
-        return self._chatgpt4_detector_tokenizer
+    def multilingual_detector_tokenizer(self):
+        """Токенизатор для мультиязычной модели"""
+        if 'multilingual_detector' not in self._tokenizers:
+            model_name = "Hello-SimpleAI/chatgpt-detector-roberta"
+            self._tokenizers['multilingual_detector'] = AutoTokenizer.from_pretrained(model_name)
+        return self._tokenizers['multilingual_detector']
 
     @property
-    def deepseek_detector_model(self):
-        """Инициализирует и возвращает модель для детекции текста DeepSeek."""
-        if self._deepseek_detector_model is None:
+    def modern_ai_detector_model(self):
+        """Специальная модель для детекции современных ИИ (ChatGPT-4, Claude, DeepSeek)"""
+        if 'modern_ai_detector' not in self._models:
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            # Используем специализированную модель для определения DeepSeek
-            # Обратите внимание, что нужно будет заменить путь на актуальную модель
-            self._deepseek_detector_model = AutoModelForSequenceClassification.from_pretrained(
-                "deepseek-detector-model-path"  # Заменить на реальный путь к модели
+            model_name = "microsoft/deberta-v3-base"
+            self._models['modern_ai_detector'] = AutoModelForSequenceClassification.from_pretrained(
+                model_name,
+                num_labels=2
             ).to(device)
-        return self._deepseek_detector_model
+        return self._models['modern_ai_detector']
 
     @property
-    def deepseek_detector_tokenizer(self):
-        """Инициализирует и возвращает токенизатор для модели детекции DeepSeek."""
-        if self._deepseek_detector_tokenizer is None:
-            self._deepseek_detector_tokenizer = AutoTokenizer.from_pretrained(
-                "deepseek-detector-model-path"  # Заменить на реальный путь к модели
-            )
-        return self._deepseek_detector_tokenizer
+    def modern_ai_detector_tokenizer(self):
+        """Токенизатор для модели детекции современных ИИ"""
+        if 'modern_ai_detector' not in self._tokenizers:
+            model_name = "microsoft/deberta-v3-base"
+            self._tokenizers['modern_ai_detector'] = AutoTokenizer.from_pretrained(model_name)
+        return self._tokenizers['modern_ai_detector']
 
 
 model_loader = ModelLoader()
