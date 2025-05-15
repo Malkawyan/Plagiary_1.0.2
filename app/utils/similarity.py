@@ -4,6 +4,7 @@ import torch
 
 logging.basicConfig(level=logging.DEBUG)
 
+
 def calculate_similarity_matrix(uploaded_embeddings, base_embeddings):
     """
     Вычисляет матрицу косинусного сходства между загруженными эмбеддингами и базой.
@@ -13,18 +14,41 @@ def calculate_similarity_matrix(uploaded_embeddings, base_embeddings):
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # Определяем, доступна ли CUDA
 
+    # Проверяем, что у нас есть эмбеддинги для обработки
+    if not uploaded_embeddings or not base_embeddings:
+        return np.array([])
+
     # Преобразуем списки эмбеддингов в единые NumPy-массивы перед созданием тензоров
     uploaded_embeddings = np.array(uploaded_embeddings, dtype=np.float32)
     base_embeddings_list = [emb for embeddings in base_embeddings.values() for emb in embeddings]
     base_embeddings_array = np.array(base_embeddings_list, dtype=np.float32)
 
+    # Проверяем что массивы не пусты
+    if uploaded_embeddings.size == 0 or base_embeddings_array.size == 0:
+        return np.array([])
+
     # Создаём тензоры PyTorch и перемещаем на устройство (GPU, если доступен)
     uploaded = torch.tensor(uploaded_embeddings, device=device)
     all_base = torch.tensor(base_embeddings_array, device=device)
 
+    # Убедимся, что тензоры имеют правильную форму для матричного умножения
+    if len(uploaded.shape) == 1:
+        uploaded = uploaded.unsqueeze(0)  # Добавляем размерность, если у нас один вектор
+
+    if len(all_base.shape) == 1:
+        all_base = all_base.unsqueeze(0)
+
     # Вычисляем косинусное сходство через матричное умножение
-    similarity_matrix = torch.mm(uploaded, all_base.T) / (
-            torch.norm(uploaded, dim=1, keepdim=True) * torch.norm(all_base, dim=1)
+    # Используем матричное транспонирование с mT вместо T
+    norm_uploaded = torch.norm(uploaded, dim=1, keepdim=True)
+    norm_all_base = torch.norm(all_base, dim=1)
+
+    # Избегаем деления на ноль
+    norm_uploaded = torch.clamp(norm_uploaded, min=1e-8)
+    norm_all_base = torch.clamp(norm_all_base, min=1e-8)
+
+    similarity_matrix = torch.mm(uploaded, all_base.mT) / (
+            norm_uploaded * norm_all_base
     )
 
     return similarity_matrix.cpu().numpy()  # Переносим обратно на CPU для дальнейшей обработки
@@ -44,6 +68,11 @@ def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, se
         return 100, {}, []
 
     similarity_matrix = calculate_similarity_matrix(uploaded_embeddings, base_embeddings)
+
+    # Проверка на пустую матрицу
+    if similarity_matrix.size == 0:
+        return 100, {}, []
+
     unique_sentences = 0
     file_similarity = {file_name: 0 for file_name in base_embeddings.keys()}
     matched_sentences = []
