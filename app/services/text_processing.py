@@ -6,7 +6,7 @@ from app.utils.similarity import calculate_uniqueness_and_similarity
 from app.utils.seo import calculate_spamminess, calculate_wateriness
 from app.config import Config  # Конфигурация приложения
 from app.utils.ai_text_detected import detect_ai_text
-from app.utils.spell_checker import init_spell_checker, check_grammar_errors as check_text
+from app.utils.spell_checker import init_spell_checker, check_spelling_errors
 
 spell_checker_tool = init_spell_checker()
 
@@ -70,7 +70,7 @@ def process_text(text: str, language: str) -> dict:
     sentences = processed_data["sentences"]
 
     # Проверка орфографии
-    spelling_errors = check_text(text, spell_checker_tool)
+    spelling_errors = check_spelling_errors(text, spell_checker_tool)
 
     # Получаем кэшированные эмбеддинги базы документов
     base_sentences = _get_base_sentences_cache()

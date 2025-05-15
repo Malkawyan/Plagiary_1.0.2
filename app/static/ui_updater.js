@@ -31,23 +31,81 @@ export class UIUpdater {
             return;
         }
 
-        let html = `<div style="font-family: 'Times New Roman', Times, serif; font-size: 11px;">`;
+        // Группируем уникальные ошибки, чтобы не показывать повторяющиеся слова
+        const uniqueErrors = this.groupUniqueErrors(errors);
 
-        // Вместо отображения только уникальных слов с ошибками,
-        // показываем все слова с ошибками, как в методе highlightSpellingErrors
-        errors.forEach(error => {
-            const errorWord = this.contentDiv.textContent.slice(error.offset, error.offset + error.length);
-            html += `<span style="color: red;">${errorWord}</span> `;
-        });
+        let html = `<div style="font-family: 'Times New Roman', Times, serif; font-size: 11px;">`;
+        html += `<p>Найдено орфографических ошибок: ${uniqueErrors.length}</p>`;
+
+        if (uniqueErrors.length > 0) {
+            html += '<div class="spelling-list">';
+            uniqueErrors.forEach(error => {
+                const errorWord = error.word;
+                const replacements = error.replacements && error.replacements.length > 0
+                    ? error.replacements.slice(0, 3).join(', ')
+                    : 'нет вариантов';
+
+                html += `
+                <div class="spelling-item">
+                    <span class="spelling-word">${errorWord}</span>
+                    <div>Варианты: ${replacements}</div>
+                </div>`;
+            });
+            html += '</div>';
+        }
 
         html += '</div>';
         spellingColumn.innerHTML = html;
     }
 
+    // Группирует уникальные ошибки по словам
+    groupUniqueErrors(errors) {
+        if (!errors || errors.length === 0) return [];
+
+        const uniqueErrorWords = {};
+
+        errors.forEach(error => {
+            const word = error.word;
+            // Если слово является самостоятельным (не частью другого слова), добавляем его
+            if (this.isStandaloneWord(error, this.contentDiv.textContent) && word.length > 1) {
+                if (!uniqueErrorWords[word]) {
+                    uniqueErrorWords[word] = error;
+                }
+            }
+        });
+
+        return Object.values(uniqueErrorWords);
+    }
+
+    // Проверяет, является ли слово самостоятельным (не частью другого слова)
+    isStandaloneWord(error, text) {
+        const offset = error.offset;
+        const word = error.word;
+
+        // Проверяем символы до и после слова
+        const charBefore = offset > 0 ? text[offset - 1] : ' ';
+        const charAfter = offset + word.length < text.length ? text[offset + word.length] : ' ';
+
+        const isWordBoundaryBefore = !this.isWordChar(charBefore);
+        const isWordBoundaryAfter = !this.isWordChar(charAfter);
+
+        return isWordBoundaryBefore && isWordBoundaryAfter;
+    }
+
+    // Проверяет, является ли символ частью слова
+    isWordChar(char) {
+        return /[\p{L}\p{N}]/u.test(char); // Включает буквы и цифры всех языков
+    }
+
     highlightSpellingErrors(text, errors) {
         if (!errors || errors.length === 0) return text;
 
-        const sortedErrors = [...errors].sort((a, b) => b.offset - a.offset);
+        // Фильтруем ошибки, оставляя только те, которые являются самостоятельными словами
+        const filteredErrors = errors.filter(error =>
+            this.isStandaloneWord(error, text) && error.word.length > 1
+        );
+
+        const sortedErrors = [...filteredErrors].sort((a, b) => b.offset - a.offset);
 
         let result = text;
         for (const error of sortedErrors) {
@@ -55,7 +113,12 @@ export class UIUpdater {
             const end = start + error.length;
             const errorWord = result.slice(start, end);
 
-            const highlighted = `<span style="color: red;">${errorWord}</span>`;
+            // Формируем варианты замены для подсказки
+            const replacements = error.replacements && error.replacements.length > 0
+                ? error.replacements.slice(0, 3).join(', ')
+                : 'нет вариантов';
+
+            const highlighted = `<span class="spelling-error" title="Варианты: ${replacements}" style="color: red;">${errorWord}</span>`;
             result = result.slice(0, start) + highlighted + result.slice(end);
         }
 
