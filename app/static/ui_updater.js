@@ -40,9 +40,9 @@ export class UIUpdater {
         if (uniqueErrors.length > 0) {
             html += '<div class="spelling-list">';
             uniqueErrors.forEach(error => {
-                const errorWord = error.word;
+                const errorWord = TextProcessor.escapeHtml(error.word);
                 const replacements = error.replacements && error.replacements.length > 0
-                    ? error.replacements.slice(0, 3).join(', ')
+                    ? error.replacements.slice(0, 3).map(r => TextProcessor.escapeHtml(r)).join(', ')
                     : 'нет вариантов';
 
                 html += `
@@ -98,24 +98,28 @@ export class UIUpdater {
     }
 
     highlightSpellingErrors(text, errors) {
-        if (!errors || errors.length === 0) return text;
+        if (!errors || errors.length === 0) return TextProcessor.escapeHtml(text);
+
+        // Экранируем весь текст сначала
+        const escapedText = TextProcessor.escapeHtml(text);
 
         // Фильтруем ошибки, оставляя только те, которые являются самостоятельными словами
         const filteredErrors = errors.filter(error =>
             this.isStandaloneWord(error, text) && error.word.length > 1
         );
 
+        // Сортируем ошибки по обратному порядку позиций
         const sortedErrors = [...filteredErrors].sort((a, b) => b.offset - a.offset);
 
-        let result = text;
+        let result = escapedText;
         for (const error of sortedErrors) {
             const start = error.offset;
             const end = start + error.length;
-            const errorWord = result.slice(start, end);
+            const errorWord = TextProcessor.escapeHtml(text.slice(start, end));
 
             // Формируем варианты замены для подсказки
             const replacements = error.replacements && error.replacements.length > 0
-                ? error.replacements.slice(0, 3).join(', ')
+                ? error.replacements.slice(0, 3).map(r => TextProcessor.escapeHtml(r)).join(', ')
                 : 'нет вариантов';
 
             const highlighted = `<span class="spelling-error" title="Варианты: ${replacements}" style="color: red;">${errorWord}</span>`;
@@ -135,41 +139,44 @@ export class UIUpdater {
     updateTextDisplay() {
         const originalText = this.contentDiv.textContent;
 
+        // Начинаем всегда с экранированного текста
+        let processedText = TextProcessor.escapeHtml(originalText);
+
         if (this.currentView === 'uniqueness') {
             if (this.data.matched_sentences && this.data.matched_sentences.length > 0) {
-                this.contentDiv.innerHTML = TextProcessor.highlightNonUniqueText(
+                processedText = TextProcessor.highlightNonUniqueText(
                     originalText, this.data.matched_sentences
                 );
-            } else {
-                this.contentDiv.innerHTML = originalText;
             }
         } else if (this.currentView === 'spelling') {
             if (this.data.spelling_errors) {
-                this.contentDiv.innerHTML = this.highlightSpellingErrors(
+                processedText = this.highlightSpellingErrors(
                     originalText, this.data.spelling_errors
                 );
-            } else {
-                this.contentDiv.innerHTML = originalText;
             }
         } else if (this.currentView === 'all') {
-            let processedText = originalText;
-
             if (this.data.matched_sentences && this.data.matched_sentences.length > 0) {
                 processedText = TextProcessor.highlightNonUniqueText(
-                    processedText, this.data.matched_sentences
+                    originalText, this.data.matched_sentences
                 );
             }
 
             if (this.data.spelling_errors) {
-                processedText = this.highlightSpellingErrors(
-                    processedText, this.data.spelling_errors
-                ).replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-            }
+                // Обрабатываем уже выделенные неуникальные фрагменты как HTML-код
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = processedText;
+                const textContent = tempDiv.textContent;
 
-            this.contentDiv.innerHTML = processedText;
-        } else {
-            this.contentDiv.innerHTML = originalText;
+                // Применяем выделение орфографических ошибок к извлеченному содержимому
+                const highlightedSpelling = this.highlightSpellingErrors(
+                    textContent, this.data.spelling_errors
+                );
+
+                processedText = highlightedSpelling;
+            }
         }
+
+        this.contentDiv.innerHTML = processedText;
     }
 
     displayResults(data) {
@@ -188,7 +195,7 @@ export class UIUpdater {
 
             for (const [filename, similarity] of Object.entries(data.file_similarity)) {
                 const roundedSimilarity = parseFloat(similarity).toFixed(2);
-                outputHTML += `<li>${filename}: ${roundedSimilarity}% совпадений</li>`;
+                outputHTML += `<li>${TextProcessor.escapeHtml(filename)}: ${roundedSimilarity}% совпадений</li>`;
             }
 
             outputHTML += '</ul>';
@@ -223,7 +230,7 @@ export class UIUpdater {
 
     displayError(error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        this.resultsDiv.innerHTML = `Ошибка: ${errorMessage}`;
+        this.resultsDiv.innerHTML = `Ошибка: ${TextProcessor.escapeHtml(errorMessage)}`;
     }
 
     displayAIResults(data) {
@@ -261,7 +268,7 @@ export class UIUpdater {
                                     ${chunk.ai_score}%
                                 </span>
                             </div>
-                            <div class="chunk-text">${chunk.text.substring(0, 150)}${chunk.text.length > 150 ? '...' : ''}</div>
+                            <div class="chunk-text">${TextProcessor.escapeHtml(chunk.text).substring(0, 150)}${chunk.text.length > 150 ? '...' : ''}</div>
                         </div>
                     `;
                 });

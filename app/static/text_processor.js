@@ -12,6 +12,7 @@ export class TextProcessor {
      * @returns {string} - Экранированный текст
      */
     static escapeHtml(text) {
+        if (!text || typeof text !== 'string') return '';
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
