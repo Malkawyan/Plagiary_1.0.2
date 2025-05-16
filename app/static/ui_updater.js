@@ -65,36 +65,30 @@ export class UIUpdater {
         const uniqueErrorWords = {};
 
         errors.forEach(error => {
-            const word = error.word;
-            // Если слово является самостоятельным (не частью другого слова), добавляем его
-            if (this.isStandaloneWord(error, this.contentDiv.textContent) && word.length > 1) {
-                if (!uniqueErrorWords[word]) {
-                    uniqueErrorWords[word] = error;
-                }
+            if (!error || !error.word) return;
+
+            const word = error.word.trim();
+            // Пропускаем пустые слова и слишком короткие
+            if (word.length <= 1) return;
+
+            // Если это не дубликат, добавляем его в список
+            if (!uniqueErrorWords[word]) {
+                uniqueErrorWords[word] = error;
             }
         });
 
         return Object.values(uniqueErrorWords);
     }
 
-    // Проверяет, является ли слово самостоятельным (не частью другого слова)
-    isStandaloneWord(error, text) {
-        const offset = error.offset;
-        const word = error.word;
+    // Преобразует HTML-текст в простой текст, сохраняя оригинальную структуру для маппинга
+    convertHtmlToPlainText(html) {
+        const tempElement = document.createElement('div');
+        tempElement.innerHTML = html;
 
-        // Проверяем символы до и после слова
-        const charBefore = offset > 0 ? text[offset - 1] : ' ';
-        const charAfter = offset + word.length < text.length ? text[offset + word.length] : ' ';
+        // Заменяем все HTML-элементы их текстовым содержимым
+        const plainText = tempElement.textContent;
 
-        const isWordBoundaryBefore = !this.isWordChar(charBefore);
-        const isWordBoundaryAfter = !this.isWordChar(charAfter);
-
-        return isWordBoundaryBefore && isWordBoundaryAfter;
-    }
-
-    // Проверяет, является ли символ частью слова
-    isWordChar(char) {
-        return /[\p{L}\p{N}]/u.test(char); // Включает буквы и цифры всех языков
+        return plainText;
     }
 
     // Безопасно преобразует текст для вставки в HTML
@@ -105,53 +99,98 @@ export class UIUpdater {
         return div.innerHTML;
     }
 
-    // Измененный метод для выделения орфографических ошибок в тексте
+    // Полностью переработанный метод выделения орфографических ошибок
     highlightSpellingErrors(text, errors) {
         if (!errors || errors.length === 0 || !text) return this.constructor.safeTextContent(text);
 
         // Сначала экранируем текст для безопасного HTML
-        let safeText = this.constructor.safeTextContent(text);
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = safeText;
+        const safeText = this.constructor.safeTextContent(text);
 
-        // Получаем чистый текст для сравнения с ошибками
-        const plainText = tempDiv.textContent;
+        // Создаем временный контейнер для HTML
+        const tempContainer = document.createElement("div");
+        tempContainer.innerHTML = safeText;
 
-        // Создаем массив для отслеживания смещений
-        const offsets = new Array(plainText.length);
-        for (let i = 0; i < plainText.length; i++) {
-            offsets[i] = i;
-        }
+        // Получаем текстовые узлы для вставки разметки
+        const allTextNodes = this.collectTextNodes(tempContainer);
 
-        // Сортируем ошибки по смещению в обратном порядке
-        const sortedErrors = [...errors]
-            .filter(error => error && error.offset !== undefined && error.length > 0)
-            .sort((a, b) => b.offset - a.offset);
+        // Сортируем ошибки от последней к первой для сохранения корректных позиций
+        const sortedErrors = [...errors].sort((a, b) => b.offset - a.offset);
 
-        // Проходим по каждой ошибке, начиная с конца текста
+        // Для каждой ошибки находим нужный текстовый узел и добавляем выделение
         for (const error of sortedErrors) {
-            const start = error.offset;
-            const length = error.length || error.word?.length || 0;
-            if (start < 0 || start >= plainText.length || length <= 0) continue;
+            if (!error || typeof error.offset !== 'number' || !error.word) continue;
 
-            const end = Math.min(start + length, plainText.length);
-            const errorWord = plainText.slice(start, end);
+            const offset = error.offset;
+            const length = error.length || error.word.length;
+            if (length <= 0) continue;
 
-            if (!errorWord || errorWord.trim() === '') continue;
-
-            // Создаем элемент с выделением
+            // Подготовим строку с заменами для всплывающей подсказки
             const replacements = error.replacements && error.replacements.length > 0
                 ? error.replacements.slice(0, 3).join(', ')
                 : 'нет вариантов';
 
-            safeText = safeText.substring(0, start) +
-                      `<span class="spelling-error" title="Варианты: ${replacements}" style="color: red; text-decoration: underline wavy red;">` +
-                      errorWord +
-                      '</span>' +
-                      safeText.substring(end);
+            // Найдем текстовый узел, содержащий эту ошибку
+            let currentPosition = 0;
+            let targetNode = null;
+            let relativeOffset = 0;
+
+            for (const node of allTextNodes) {
+                const nodeLength = node.nodeValue.length;
+
+                if (offset >= currentPosition && offset < currentPosition + nodeLength) {
+                    targetNode = node;
+                    relativeOffset = offset - currentPosition;
+                    break;
+                }
+
+                currentPosition += nodeLength;
+            }
+
+            // Если нашли подходящий узел, вставляем выделение
+            if (targetNode) {
+                const nodeText = targetNode.nodeValue;
+                const errorEnd = Math.min(relativeOffset + length, nodeText.length);
+
+                // Создаем 3 новых текстовых узла: до ошибки, ошибка с выделением, после ошибки
+                const beforeError = nodeText.substring(0, relativeOffset);
+                const errorText = nodeText.substring(relativeOffset, errorEnd);
+                const afterError = nodeText.substring(errorEnd);
+
+                const errorSpan = document.createElement('span');
+                errorSpan.className = 'spelling-error';
+                errorSpan.style.color = 'red';
+                errorSpan.style.textDecoration = 'underline wavy red';
+                errorSpan.title = `Варианты: ${replacements}`;
+                errorSpan.textContent = errorText;
+
+                const fragment = document.createDocumentFragment();
+                if (beforeError) fragment.appendChild(document.createTextNode(beforeError));
+                fragment.appendChild(errorSpan);
+                if (afterError) fragment.appendChild(document.createTextNode(afterError));
+
+                targetNode.parentNode.replaceChild(fragment, targetNode);
+            }
         }
 
-        return safeText;
+        return tempContainer.innerHTML;
+    }
+
+    // Собирает все текстовые узлы в контейнере
+    collectTextNodes(container) {
+        const textNodes = [];
+        const treeWalker = document.createTreeWalker(
+            container,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+        );
+
+        let node;
+        while (node = treeWalker.nextNode()) {
+            textNodes.push(node);
+        }
+
+        return textNodes;
     }
 
     switchView(viewType) {
@@ -183,67 +222,83 @@ export class UIUpdater {
             // В режиме "Все" показываем и заимствования, и орфографические ошибки
             let tempText = originalText;
 
+            // Сначала применяем выделение неуникальных фрагментов
             if (this.data.matched_sentences?.length > 0) {
                 tempText = TextProcessor.highlightNonUniqueText(
                     tempText, this.data.matched_sentences
                 );
             }
 
+            // Затем выделяем орфографические ошибки
             if (this.data.spelling_errors) {
-                // Для комбинирования выделений используем DOM-манипуляции
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = tempText;
 
-                // Находим все текстовые узлы
-                const walker = document.createTreeWalker(
-                    tempDiv,
-                    NodeFilter.SHOW_TEXT,
-                    null,
-                    false
-                );
+                // Обходим DOM-дерево и обрабатываем только текстовые узлы
+                const textNodes = this.collectTextNodes(tempDiv);
 
-                const textNodes = [];
-                let node;
-                while (node = walker.nextNode()) {
-                    textNodes.push(node);
+                // Строим карту смещений для всех текстовых узлов
+                let currentPosition = 0;
+                const nodePositions = [];
+
+                for (const node of textNodes) {
+                    const nodeLength = node.nodeValue.length;
+                    nodePositions.push({
+                        node,
+                        start: currentPosition,
+                        end: currentPosition + nodeLength
+                    });
+                    currentPosition += nodeLength;
                 }
 
-                // Проверяем каждый текстовый узел на наличие орфографических ошибок
-                for (const node of textNodes) {
-                    const nodeText = node.nodeValue;
-                    const parentNode = node.parentNode;
+                // Для каждой ошибки ищем соответствующий текстовый узел
+                for (const error of this.data.spelling_errors) {
+                    if (!error || typeof error.offset !== 'number' || !error.word) continue;
 
-                    // Не обрабатываем уже выделенные фрагменты
-                    if (parentNode.classList && parentNode.classList.contains('spelling-error')) {
-                        continue;
-                    }
+                    const errorStart = error.offset;
+                    const errorLength = error.length || error.word.length;
+                    const errorEnd = errorStart + errorLength;
 
-                    // Ищем ошибки в этом текстовом узле
-                    const nodeErrors = this.data.spelling_errors.filter(error => {
-                        const errorStart = error.offset;
-                        const errorEnd = errorStart + error.length;
+                    // Ищем узел, содержащий эту ошибку
+                    for (const {node, start, end} of nodePositions) {
+                        // Если ошибка полностью находится в этом узле
+                        if (errorStart >= start && errorEnd <= end) {
+                            // Вычисляем относительные смещения внутри узла
+                            const relativeStart = errorStart - start;
+                            const relativeEnd = errorEnd - start;
 
-                        // Получаем позицию узла в оригинальном тексте
-                        let offset = 0;
-                        let current = node;
-                        while (current.previousSibling) {
-                            if (current.previousSibling.nodeType === Node.TEXT_NODE) {
-                                offset += current.previousSibling.nodeValue.length;
-                            } else if (current.previousSibling.nodeType === Node.ELEMENT_NODE) {
-                                offset += current.previousSibling.textContent.length;
+                            const nodeText = node.nodeValue;
+                            const errorWord = nodeText.substring(relativeStart, relativeEnd);
+
+                            // Если слово имеет смысл выделять
+                            if (errorWord && errorWord.trim() !== '') {
+                                // Готовим замены для подсказки
+                                const replacements = error.replacements && error.replacements.length > 0
+                                    ? error.replacements.slice(0, 3).join(', ')
+                                    : 'нет вариантов';
+
+                                // Разбиваем текст на 3 части и создаем выделение
+                                const beforeError = nodeText.substring(0, relativeStart);
+                                const afterError = nodeText.substring(relativeEnd);
+
+                                const errorSpan = document.createElement('span');
+                                errorSpan.className = 'spelling-error';
+                                errorSpan.style.color = 'red';
+                                errorSpan.style.textDecoration = 'underline wavy red';
+                                errorSpan.title = `Варианты: ${replacements}`;
+                                errorSpan.textContent = errorWord;
+
+                                const fragment = document.createDocumentFragment();
+                                if (beforeError) fragment.appendChild(document.createTextNode(beforeError));
+                                fragment.appendChild(errorSpan);
+                                if (afterError) fragment.appendChild(document.createTextNode(afterError));
+
+                                node.parentNode.replaceChild(fragment, node);
+
+                                // Обновляем карту смещений после изменения DOM
+                                break;
                             }
-                            current = current.previousSibling;
                         }
-
-                        // Проверяем, находится ли ошибка в этом узле
-                        return errorStart >= offset && errorEnd <= offset + nodeText.length;
-                    });
-
-                    if (nodeErrors.length > 0) {
-                        // Создаем фрагмент с выделенными ошибками
-                        const highlightedText = this.highlightSpellingErrors(nodeText, nodeErrors);
-                        const fragment = document.createRange().createContextualFragment(highlightedText);
-                        parentNode.replaceChild(fragment, node);
                     }
                 }
 
@@ -253,23 +308,6 @@ export class UIUpdater {
 
         // Обновляем содержимое
         this.contentDiv.innerHTML = processedText;
-    }
-
-    // Вспомогательный метод для поиска текстовых узлов
-    findTextNodes(element) {
-        const walker = document.createTreeWalker(
-            element,
-            NodeFilter.SHOW_TEXT,
-            null,
-            false
-        );
-
-        const nodes = [];
-        let node;
-        while (node = walker.nextNode()) {
-            nodes.push(node);
-        }
-        return nodes;
     }
 
     displayResults(data) {
