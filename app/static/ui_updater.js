@@ -11,6 +11,7 @@ export class UIUpdater {
         this.aiResultsDiv = aiResultsDiv;
         this.data = null;
         this.currentView = 'all';
+        this.filteredSpellingErrors = []; // Храним отфильтрованные ошибки
     }
 
     updateLoadingState(isLoading) {
@@ -23,6 +24,55 @@ export class UIUpdater {
         }
     }
 
+    // Проверяет, является ли слово самостоятельным (не частью другого слова)
+    isStandaloneWord(error, text) {
+        const offset = error.offset;
+        const word = error.word;
+        const charBefore = offset > 0 ? text[offset - 1] : ' ';
+        const charAfter = offset + word.length < text.length ? text[offset + word.length] : ' ';
+
+        // Слово стоит отдельно, если до и после него НЕ буква/цифра
+        return !this.isWordChar(charBefore) && !this.isWordChar(charAfter);
+    }
+
+    isWordChar(char) {
+        return /[a-zA-Zа-яА-Я0-9]/.test(char); // Буквы и цифры
+    }
+
+    // Проверяет, является ли символ частью слова
+    isWordChar(char) {
+        return /[\p{L}\p{N}]/u.test(char); // Включает буквы и цифры всех языков
+    }
+
+    // Фильтрует ошибки по заданным критериям
+    filterSpellingErrors(errors, text) {
+        if (!errors || errors.length === 0) return [];
+
+        return errors.filter(error => {
+            // Проверяем, что слово не часть другого слова
+            const isStandalone = this.isStandaloneWord(error, text);
+            // Игнорируем слишком короткие "ошибки" (возможно, аббревиатуры)
+            const isNotTooShort = error.word.length > 2;
+            return isStandalone && isNotTooShort;
+        });
+    }
+
+    // Группирует уникальные ошибки по словам
+    groupUniqueErrors(filteredErrors) {
+        if (!filteredErrors || filteredErrors.length === 0) return [];
+
+        const uniqueErrorWords = {};
+
+        filteredErrors.forEach(error => {
+            const word = error.word;
+            if (!uniqueErrorWords[word]) {
+                uniqueErrorWords[word] = error;
+            }
+        });
+
+        return Object.values(uniqueErrorWords);
+    }
+
     displaySpellingResults(errors) {
         const spellingColumn = document.getElementById('spell-results');
 
@@ -31,8 +81,8 @@ export class UIUpdater {
             return;
         }
 
-        // Группируем уникальные ошибки, чтобы не показывать повторяющиеся слова
-        const uniqueErrors = this.groupUniqueErrors(errors);
+        // Используем уже отфильтрованные ошибки
+        const uniqueErrors = this.groupUniqueErrors(this.filteredSpellingErrors);
 
         let html = `<div style="font-family: 'Times New Roman', Times, serif; font-size: 11px;">`;
         html += `<p>Найдено орфографических ошибок: ${uniqueErrors.length}</p>`;
@@ -58,72 +108,75 @@ export class UIUpdater {
         spellingColumn.innerHTML = html;
     }
 
-    // Группирует уникальные ошибки по словам
-    groupUniqueErrors(errors) {
-        if (!errors || errors.length === 0) return [];
-
-        const uniqueErrorWords = {};
-
-        errors.forEach(error => {
-            const word = error.word;
-            // Если слово является самостоятельным (не частью другого слова), добавляем его
-            if (this.isStandaloneWord(error, this.contentDiv.textContent) && word.length > 1) {
-                if (!uniqueErrorWords[word]) {
-                    uniqueErrorWords[word] = error;
-                }
-            }
-        });
-
-        return Object.values(uniqueErrorWords);
-    }
-
-    // Проверяет, является ли слово самостоятельным (не частью другого слова)
-    isStandaloneWord(error, text) {
-        const offset = error.offset;
-        const word = error.word;
-
-        // Проверяем символы до и после слова
-        const charBefore = offset > 0 ? text[offset - 1] : ' ';
-        const charAfter = offset + word.length < text.length ? text[offset + word.length] : ' ';
-
-        const isWordBoundaryBefore = !this.isWordChar(charBefore);
-        const isWordBoundaryAfter = !this.isWordChar(charAfter);
-
-        return isWordBoundaryBefore && isWordBoundaryAfter;
-    }
-
-    // Проверяет, является ли символ частью слова
-    isWordChar(char) {
-        return /[\p{L}\p{N}]/u.test(char); // Включает буквы и цифры всех языков
-    }
-
     highlightSpellingErrors(text, errors) {
         if (!errors || errors.length === 0) return TextProcessor.escapeHtml(text);
 
-        // Экранируем весь текст сначала
+        // Экранируем текст и запоминаем изменения длины
         const escapedText = TextProcessor.escapeHtml(text);
+        const escapeDiff = escapedText.length - text.length;
 
-        // Фильтруем ошибки, оставляя только те, которые являются самостоятельными словами
-        const filteredErrors = errors.filter(error =>
-            this.isStandaloneWord(error, text) && error.word.length > 1
-        );
+        // Если экранирование не изменило длину (нет спецсимволов), работаем как раньше
+        if (escapeDiff === 0) {
+            const sortedErrors = [...errors].sort((a, b) => b.offset - a.offset);
+            let result = escapedText;
 
-        // Сортируем ошибки по обратному порядку позиций
-        const sortedErrors = [...filteredErrors].sort((a, b) => b.offset - a.offset);
+            for (const error of sortedErrors) {
+                const start = error.offset;
+                const end = start + error.length;
+                const errorWord = result.slice(start, end);
+                const replacements = error.replacements?.slice(0, 3).join(', ') || 'нет вариантов';
 
+                result = result.slice(0, start) +
+                         `<span class="spelling-error" title="Варианты: ${replacements}" style="color: red;">${errorWord}</span>` +
+                         result.slice(end);
+            }
+            return result;
+        }
+
+        // Иначе пересчитываем позиции ошибок с учетом экранирования
+        const adjustedErrors = errors.map(error => {
+            let newOffset = error.offset;
+            let newLength = error.length;
+
+            // Проходим по тексту до ошибки и считаем, насколько сместились символы
+            let cumulativeOffset = 0;
+            for (let i = 0; i < error.offset; i++) {
+                const char = text[i];
+                const escapedChar = TextProcessor.escapeHtml(char);
+                cumulativeOffset += escapedChar.length - 1; // Насколько увеличилась позиция
+            }
+            newOffset += cumulativeOffset;
+
+            // Корректируем длину ошибки (если внутри есть экранированные символы)
+            let lengthAdjustment = 0;
+            for (let i = error.offset; i < error.offset + error.length; i++) {
+                const char = text[i];
+                const escapedChar = TextProcessor.escapeHtml(char);
+                lengthAdjustment += escapedChar.length - 1;
+            }
+            newLength += lengthAdjustment;
+
+            return {
+                ...error,
+                offset: newOffset,
+                length: newLength,
+            };
+        });
+
+        // Сортируем ошибки от конца к началу, чтобы вставка не ломала позиции
+        const sortedErrors = adjustedErrors.sort((a, b) => b.offset - a.offset);
         let result = escapedText;
+
+        // Вставляем подсветку ошибок
         for (const error of sortedErrors) {
             const start = error.offset;
             const end = start + error.length;
-            const errorWord = TextProcessor.escapeHtml(text.slice(start, end));
+            const errorWord = result.slice(start, end);
+            const replacements = error.replacements?.slice(0, 3).join(', ') || 'нет вариантов';
 
-            // Формируем варианты замены для подсказки
-            const replacements = error.replacements && error.replacements.length > 0
-                ? error.replacements.slice(0, 3).map(r => TextProcessor.escapeHtml(r)).join(', ')
-                : 'нет вариантов';
-
-            const highlighted = `<span class="spelling-error" title="Варианты: ${replacements}" style="color: red;">${errorWord}</span>`;
-            result = result.slice(0, start) + highlighted + result.slice(end);
+            result = result.slice(0, start) +
+                     `<span class="spelling-error" title="Варианты: ${replacements}" style="color: red;">${errorWord}</span>` +
+                     result.slice(end);
         }
 
         return result;
@@ -155,24 +208,55 @@ export class UIUpdater {
                 );
             }
         } else if (this.currentView === 'all') {
+            // Создаем массив маркеров для применения выделений
+            let markers = [];
+
+            // Добавляем маркеры неуникальных фрагментов
             if (this.data.matched_sentences && this.data.matched_sentences.length > 0) {
-                processedText = TextProcessor.highlightNonUniqueText(
-                    originalText, this.data.matched_sentences
-                );
+                this.data.matched_sentences.forEach(sentence => {
+                    markers.push({
+                        start: sentence.start_pos,
+                        end: sentence.end_pos,
+                        type: 'uniqueness',
+                        data: sentence
+                    });
+                });
             }
 
-            if (this.data.spelling_errors) {
-                // Обрабатываем уже выделенные неуникальные фрагменты как HTML-код
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = processedText;
-                const textContent = tempDiv.textContent;
+            // Добавляем маркеры орфографических ошибок (используем фильтрованный список)
+            if (this.filteredSpellingErrors && this.filteredSpellingErrors.length > 0) {
+                this.filteredSpellingErrors.forEach(error => {
+                    markers.push({
+                        start: error.offset,
+                        end: error.offset + error.length,
+                        type: 'spelling',
+                        data: error
+                    });
+                });
+            }
 
-                // Применяем выделение орфографических ошибок к извлеченному содержимому
-                const highlightedSpelling = this.highlightSpellingErrors(
-                    textContent, this.data.spelling_errors
-                );
+            // Сортируем маркеры по их позиции в тексте (от конца к началу)
+            markers.sort((a, b) => b.start - a.start);
 
-                processedText = highlightedSpelling;
+            // Применяем все маркеры
+            for (const marker of markers) {
+                const start = marker.start;
+                const end = marker.end;
+
+                if (marker.type === 'uniqueness') {
+                    const fragment = TextProcessor.escapeHtml(originalText.slice(start, end));
+                    const source = marker.data.source ? TextProcessor.escapeHtml(marker.data.source) : '';
+                    const highlighted = `<span class="non-unique" title="Источник: ${source}" style="background-color: #ffe6e6;">${fragment}</span>`;
+                    processedText = processedText.slice(0, start) + highlighted + processedText.slice(end);
+                } else if (marker.type === 'spelling') {
+                    const errorWord = TextProcessor.escapeHtml(originalText.slice(start, end));
+                    const replacements = marker.data.replacements && marker.data.replacements.length > 0
+                        ? marker.data.replacements.slice(0, 3).map(r => TextProcessor.escapeHtml(r)).join(', ')
+                        : 'нет вариантов';
+
+                    const highlighted = `<span class="spelling-error" title="Варианты: ${replacements}" style="color: red;">${errorWord}</span>`;
+                    processedText = processedText.slice(0, start) + highlighted + processedText.slice(end);
+                }
             }
         }
 
@@ -219,10 +303,14 @@ export class UIUpdater {
         }
 
         if (data.spelling_errors) {
-            this.displaySpellingResults(data.spelling_errors);
+            // Фильтруем и сохраняем список ошибок при первой загрузке данных
+            const originalText = this.contentDiv.textContent;
+            this.filteredSpellingErrors = this.filterSpellingErrors(data.spelling_errors, originalText);
+            this.displaySpellingResults(this.filteredSpellingErrors);
         } else {
             const spellingColumn = document.getElementById('spell-results');
             spellingColumn.innerHTML = `<p>${SPELLING_MESSAGES.NO_ERRORS}</p>`;
+            this.filteredSpellingErrors = [];
         }
 
         this.updateTextDisplay();
