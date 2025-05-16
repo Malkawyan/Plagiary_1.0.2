@@ -26,11 +26,11 @@ export class TextProcessor {
      * @returns {string} - Текст с HTML-разметкой для выделения неуникальных фрагментов
      */
     static highlightNonUniqueText(fullText, matchedSentences) {
-        // Проверка на пустые входные данные
         if (!fullText || !matchedSentences || matchedSentences.length === 0) {
-            return this.escapeHtml(fullText);
+            return fullText;
         }
 
+        // Экранируем текст для безопасного использования в HTML
         const escapedText = this.escapeHtml(fullText);
         let result = escapedText;
         const matches = [];

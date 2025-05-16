@@ -50,10 +50,17 @@ export class AntiPlagiarismApp {
             const file = event.target.files[0];
             if (file) {
                 try {
+                    // Очищаем содержимое перед загрузкой нового файла
+                    this.contentDiv.innerHTML = '';
+
                     await this.fileHandler.handleFileUpload(file);
                     this.startButton.disabled = false;
+
+                    // После загрузки файла сохраняем текст в data-атрибут для безопасного доступа
+                    this.contentDiv.dataset.originalText = this.contentDiv.textContent;
                 } catch (error) {
                     console.error('File processing error:', error);
+                    this.statusDiv.textContent = 'Ошибка при обработке файла';
                 }
             }
         });
@@ -61,11 +68,14 @@ export class AntiPlagiarismApp {
         // Обработчик ввода текста
         this.contentDiv.addEventListener('input', () => {
             this.startButton.disabled = false;
+            // Обновляем оригинальный текст при ручном редактировании
+            this.contentDiv.dataset.originalText = this.contentDiv.textContent;
         });
 
         // Обработчик кнопки проверки
         this.startButton.addEventListener('click', () => {
-            const text = this.contentDiv.textContent;
+            // Используем оригинальный текст из data-атрибута или текущий текст
+            const text = this.contentDiv.dataset.originalText || this.contentDiv.textContent;
             const file = this.fileInput.files[0];
             this.apiService.checkForPlagiarism(text, file);
         });
