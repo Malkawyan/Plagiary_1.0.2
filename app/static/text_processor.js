@@ -19,7 +19,7 @@ export class TextProcessor {
     }
 
     /**
-     * Выделяет неуникальные предложения в тексте
+     * Выделяет неуникальные предложения в тексте с улучшенным алгоритмом
      * @static
      * @param {string} fullText - Полный текст для анализа
      * @param {string[]} matchedSentences - Массив неуникальных предложений
@@ -27,61 +27,71 @@ export class TextProcessor {
      */
     static highlightNonUniqueText(fullText, matchedSentences) {
         if (!fullText || !matchedSentences || matchedSentences.length === 0) {
-            return fullText;
+            return this.escapeHtml(fullText);
         }
 
         // Экранируем текст для безопасного использования в HTML
-        const escapedText = this.escapeHtml(fullText);
-        let result = escapedText;
-        const matches = [];
-        const textChars = new Array(escapedText.length).fill(false);
+        let escapedText = this.escapeHtml(fullText);
 
-        // Сортировка предложений по длине для правильного вложения
-        const sortedSentences = [...matchedSentences].sort((a, b) => b.length - a.length);
+        // Создаем структуру для отслеживания позиций в тексте
+        const positions = [];
 
-        // Поиск всех вхождений каждого предложения в тексте
-        sortedSentences.forEach(sentence => {
+        // Обрабатываем все неуникальные предложения
+        matchedSentences.forEach(sentence => {
+            // Игнорируем пустые или слишком короткие предложения
+            if (!sentence || sentence.length < 3) return;
+
             const escapedSentence = this.escapeHtml(sentence);
-            let index = escapedText.indexOf(escapedSentence);
+            let startPos = 0;
 
-            // Обработка всех вхождений предложения в тексте
-            while (index !== -1) {
-                let canHighlight = true;
+            // Находим все вхождения предложения в тексте
+            while (true) {
+                const pos = escapedText.indexOf(escapedSentence, startPos);
+                if (pos === -1) break;
 
-                // Проверка на пересечение с уже выделенными областями
-                for (let i = index; i < index + escapedSentence.length; i++) {
-                    if (textChars[i]) {
-                        canHighlight = false;
-                        break;
-                    }
-                }
+                positions.push({
+                    start: pos,
+                    end: pos + escapedSentence.length,
+                    text: escapedSentence
+                });
 
-                if (canHighlight) {
-                    matches.push({
-                        start: index,
-                        end: index + escapedSentence.length,
-                        text: escapedSentence
-                    });
-
-                    // Помечаем символы как выделенные
-                    for (let i = index; i < index + escapedSentence.length; i++) {
-                        textChars[i] = true;
-                    }
-                }
-
-                // Поиск следующего вхождения
-                index = escapedText.indexOf(escapedSentence, index + 1);
+                startPos = pos + 1; // Ищем следующее вхождение
             }
         });
 
-        // Вставка HTML-тегов для выделения, начиная с конца текста
-        matches.sort((a, b) => b.start - a.start).forEach(match => {
-            result = result.substring(0, match.start) +
-                     '<span class="non-unique">' + match.text + '</span>' +
-                     result.substring(match.end);
+        // Сортируем позиции от конца к началу текста для правильной вставки HTML-тегов
+        positions.sort((a, b) => b.start - a.start);
+
+        // Устраняем перекрытия
+        const nonOverlappingPositions = [];
+        for (let i = 0; i < positions.length; i++) {
+            let overlaps = false;
+
+            for (let j = 0; j < nonOverlappingPositions.length; j++) {
+                // Проверяем на перекрытие
+                if (positions[i].start < nonOverlappingPositions[j].end &&
+                    positions[i].end > nonOverlappingPositions[j].start) {
+                    overlaps = true;
+                    break;
+                }
+            }
+
+            if (!overlaps) {
+                nonOverlappingPositions.push(positions[i]);
+            }
+        }
+
+        // Вставляем HTML-теги для выделения
+        nonOverlappingPositions.forEach(pos => {
+            escapedText =
+                escapedText.substring(0, pos.start) +
+                '<span class="non-unique" style="background-color: yellow; color: black;">' +
+                pos.text +
+                '</span>' +
+                escapedText.substring(pos.end);
         });
 
-        return result;
+        return escapedText;
     }
 
     /**

@@ -54,13 +54,13 @@ def calculate_similarity_matrix(uploaded_embeddings, base_embeddings):
     return similarity_matrix.cpu().numpy()  # Переносим обратно на CPU для дальнейшей обработки
 
 
-def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, sentences, threshold=70):
+def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, sentences, threshold=60):
     """
     Вычисляет общую уникальность текста и проценты заимствования для каждого файла.
     :param uploaded_embeddings: список эмбеддингов загруженного текста.
     :param base_embeddings: словарь с эмбеддингами базы (ключ — имя файла, значение — список эмбеддингов).
     :param sentences: список всех предложений загруженного текста.
-    :param threshold: порог сходства (по умолчанию 80%).
+    :param threshold: порог сходства (снижен с 70% до 60% для более чувствительного обнаружения).
     :return: кортеж (общая уникальность, словарь с процентами заимствования для каждого файла, список неуникальных предложений).
     """
     total_sentences = len(uploaded_embeddings)
@@ -92,6 +92,7 @@ def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, se
     for file_name in file_similarity:
         file_similarity[file_name] = (file_similarity[file_name] / total_sentences) * 100
 
-    file_similarity = {file: sim for file, sim in file_similarity.items() if sim > 1}
+    # Сохраняем все файлы с ненулевым совпадением
+    file_similarity = {file: sim for file, sim in file_similarity.items() if sim > 0}
 
     return overall_uniqueness, file_similarity, matched_sentences

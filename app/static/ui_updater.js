@@ -99,80 +99,75 @@ export class UIUpdater {
         return div.innerHTML;
     }
 
-    // Полностью переработанный метод выделения орфографических ошибок
+    // Улучшенный метод выделения орфографических ошибок
     highlightSpellingErrors(text, errors) {
         if (!errors || errors.length === 0 || !text) return this.constructor.safeTextContent(text);
 
-        // Сначала экранируем текст для безопасного HTML
-        const safeText = this.constructor.safeTextContent(text);
+        // Создаем массив для маркеров выделения
+        const markers = [];
 
-        // Создаем временный контейнер для HTML
-        const tempContainer = document.createElement("div");
-        tempContainer.innerHTML = safeText;
-
-        // Получаем текстовые узлы для вставки разметки
-        const allTextNodes = this.collectTextNodes(tempContainer);
-
-        // Сортируем ошибки от последней к первой для сохранения корректных позиций
-        const sortedErrors = [...errors].sort((a, b) => b.offset - a.offset);
-
-        // Для каждой ошибки находим нужный текстовый узел и добавляем выделение
-        for (const error of sortedErrors) {
-            if (!error || typeof error.offset !== 'number' || !error.word) continue;
-
-            const offset = error.offset;
-            const length = error.length || error.word.length;
-            if (length <= 0) continue;
-
-            // Подготовим строку с заменами для всплывающей подсказки
-            const replacements = error.replacements && error.replacements.length > 0
-                ? error.replacements.slice(0, 3).join(', ')
-                : 'нет вариантов';
-
-            // Найдем текстовый узел, содержащий эту ошибку
-            let currentPosition = 0;
-            let targetNode = null;
-            let relativeOffset = 0;
-
-            for (const node of allTextNodes) {
-                const nodeLength = node.nodeValue.length;
-
-                if (offset >= currentPosition && offset < currentPosition + nodeLength) {
-                    targetNode = node;
-                    relativeOffset = offset - currentPosition;
-                    break;
-                }
-
-                currentPosition += nodeLength;
+        // Обрабатываем каждую ошибку и ищем её точное положение в тексте
+        for (const error of errors) {
+            if (!error || !error.word || error.word.trim().length <= 1) {
+                continue;
             }
 
-            // Если нашли подходящий узел, вставляем выделение
-            if (targetNode) {
-                const nodeText = targetNode.nodeValue;
-                const errorEnd = Math.min(relativeOffset + length, nodeText.length);
+            const errorWord = error.word.trim();
 
-                // Создаем 3 новых текстовых узла: до ошибки, ошибка с выделением, после ошибки
-                const beforeError = nodeText.substring(0, relativeOffset);
-                const errorText = nodeText.substring(relativeOffset, errorEnd);
-                const afterError = nodeText.substring(errorEnd);
+            // Ищем все вхождения ошибочного слова в тексте
+            let searchText = text.toLowerCase();
+            let searchWord = errorWord.toLowerCase();
+            let pos = 0;
 
-                const errorSpan = document.createElement('span');
-                errorSpan.className = 'spelling-error';
-                errorSpan.style.color = 'red';
-                errorSpan.style.textDecoration = 'underline wavy red';
-                errorSpan.title = `Варианты: ${replacements}`;
-                errorSpan.textContent = errorText;
+            while ((pos = searchText.indexOf(searchWord, pos)) !== -1) {
+                // Проверяем, что найденное слово - отдельное слово, а не часть другого слова
+                const prevChar = pos > 0 ? searchText.charAt(pos - 1) : ' ';
+                const nextChar = pos + searchWord.length < searchText.length ?
+                                 searchText.charAt(pos + searchWord.length) : ' ';
 
-                const fragment = document.createDocumentFragment();
-                if (beforeError) fragment.appendChild(document.createTextNode(beforeError));
-                fragment.appendChild(errorSpan);
-                if (afterError) fragment.appendChild(document.createTextNode(afterError));
+                const isBoundaryBefore = /[\s.,;:!?'"()\[\]{}<>—–-]/.test(prevChar);
+                const isBoundaryAfter = /[\s.,;:!?'"()\[\]{}<>—–-]/.test(nextChar);
 
-                targetNode.parentNode.replaceChild(fragment, targetNode);
+                if (isBoundaryBefore && isBoundaryAfter) {
+                    // Получаем оригинальное слово из исходного текста (с сохранением регистра)
+                    const originalWord = text.substring(pos, pos + errorWord.length);
+
+                    // Добавляем маркер для выделения
+                    markers.push({
+                        start: pos,
+                        end: pos + originalWord.length,
+                        word: originalWord,
+                        replacements: error.replacements || []
+                    });
+                }
+
+                pos += searchWord.length;
             }
         }
 
-        return tempContainer.innerHTML;
+        // Сортируем маркеры от конца к началу текста
+        markers.sort((a, b) => b.start - a.start);
+
+        // Строим результирующий HTML с выделенными ошибками
+        let result = text;
+
+        markers.forEach(marker => {
+            const replacements = marker.replacements && marker.replacements.length > 0
+                ? marker.replacements.slice(0, 3).join(', ')
+                : 'нет вариантов';
+
+            const before = result.substring(0, marker.start);
+            const errorText = result.substring(marker.start, marker.end);
+            const after = result.substring(marker.end);
+
+            result = before +
+                     `<span class="spelling-error" title="Варианты: ${replacements}">` +
+                     errorText +
+                     '</span>' +
+                     after;
+        });
+
+        return result;
     }
 
     // Собирает все текстовые узлы в контейнере
@@ -194,9 +189,28 @@ export class UIUpdater {
     }
 
     switchView(viewType) {
+        console.log(`Переключение режима отображения на: ${viewType}`);
         this.currentView = viewType;
-        if (this.data) {
-            this.updateTextDisplay();
+
+        // Подсветим активную вкладку
+        this.highlightActiveTab(viewType);
+
+        // Всегда вызываем обновление отображения при переключении представления
+        this.updateTextDisplay();
+    }
+
+    // Добавляем метод для подсветки активной вкладки
+    highlightActiveTab(viewType) {
+        // Находим все колонки и удаляем активный класс
+        const columns = document.querySelectorAll('.info-column');
+        columns.forEach(column => {
+            column.classList.remove('active');
+        });
+
+        // Добавляем активный класс к выбранной колонке
+        const activeColumn = document.querySelector(`.info-column[data-view="${viewType}"]`);
+        if (activeColumn) {
+            activeColumn.classList.add('active');
         }
     }
 
@@ -204,105 +218,61 @@ export class UIUpdater {
         const originalText = this.contentDiv.dataset.originalText || this.contentDiv.textContent;
         let processedText = originalText;
 
+        // Журналируем для отладки
+        console.log(`Режим отображения: ${this.currentView}`);
+
+        // Убедимся, что свойства CSS для выделений есть в документе
+        this.ensureHighlightingStyles();
+
+        // Если данных еще нет или режим "обычный текст", просто отображаем оригинальный текст
+        if (!this.data) {
+            console.log("Данных проверки нет, отображаем оригинальный текст");
+            this.contentDiv.innerHTML = this.constructor.safeTextContent(originalText);
+            return;
+        }
+
+        console.log(`Неуникальные предложения:`, this.data?.matched_sentences?.length || 0);
+        console.log(`Орфографические ошибки:`, this.data?.spelling_errors?.length || 0);
+
         // Проверяем, какой режим отображения выбран
-        if (this.currentView === 'uniqueness') {
-            if (this.data.matched_sentences?.length > 0) {
+        if (this.currentView === 'uniqueness' || this.currentView === 'all') {
+            // Проверяем наличие неуникальных предложений
+            if (this.data.matched_sentences && this.data.matched_sentences.length > 0) {
+                console.log("Применяем выделение неуникальных фрагментов");
+                // Применяем улучшенный метод выделения
                 processedText = TextProcessor.highlightNonUniqueText(
                     originalText, this.data.matched_sentences
                 );
+            } else {
+                console.log("Неуникальных предложений не найдено");
             }
-        } else if (this.currentView === 'spelling') {
-            if (this.data.spelling_errors) {
-                // Непосредственное выделение орфографических ошибок
-                processedText = this.highlightSpellingErrors(
-                    originalText, this.data.spelling_errors
-                );
-            }
-        } else if (this.currentView === 'all') {
-            // В режиме "Все" показываем и заимствования, и орфографические ошибки
-            let tempText = originalText;
+        }
 
-            // Сначала применяем выделение неуникальных фрагментов
-            if (this.data.matched_sentences?.length > 0) {
-                tempText = TextProcessor.highlightNonUniqueText(
-                    tempText, this.data.matched_sentences
-                );
-            }
+        // Обрабатываем орфографические ошибки, если нужно
+        if (this.currentView === 'spelling' || this.currentView === 'all') {
+            if (this.data.spelling_errors && this.data.spelling_errors.length > 0) {
+                console.log("Применяем выделение орфографических ошибок");
 
-            // Затем выделяем орфографические ошибки
-            if (this.data.spelling_errors) {
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = tempText;
-
-                // Обходим DOM-дерево и обрабатываем только текстовые узлы
-                const textNodes = this.collectTextNodes(tempDiv);
-
-                // Строим карту смещений для всех текстовых узлов
-                let currentPosition = 0;
-                const nodePositions = [];
-
-                for (const node of textNodes) {
-                    const nodeLength = node.nodeValue.length;
-                    nodePositions.push({
-                        node,
-                        start: currentPosition,
-                        end: currentPosition + nodeLength
-                    });
-                    currentPosition += nodeLength;
+                // В зависимости от режима отображения
+                if (this.currentView === 'spelling') {
+                    // Для режима только орфографии - работаем с оригинальным текстом
+                    processedText = this.highlightSpellingErrors(
+                        originalText,
+                        this.data.spelling_errors
+                    );
+                } else if (this.currentView === 'all') {
+                    // Для комбинированного режима сначала получаем текст без HTML-тегов
+                    // затем применяем выделение орфографии
+                    const plainText = this.convertHtmlToPlainText(processedText);
+                    // Применяем только выделение орфографии к оригинальному тексту
+                    // и заменяем processedText результатом
+                    processedText = this.highlightSpellingErrors(
+                        originalText,
+                        this.data.spelling_errors
+                    );
                 }
-
-                // Для каждой ошибки ищем соответствующий текстовый узел
-                for (const error of this.data.spelling_errors) {
-                    if (!error || typeof error.offset !== 'number' || !error.word) continue;
-
-                    const errorStart = error.offset;
-                    const errorLength = error.length || error.word.length;
-                    const errorEnd = errorStart + errorLength;
-
-                    // Ищем узел, содержащий эту ошибку
-                    for (const {node, start, end} of nodePositions) {
-                        // Если ошибка полностью находится в этом узле
-                        if (errorStart >= start && errorEnd <= end) {
-                            // Вычисляем относительные смещения внутри узла
-                            const relativeStart = errorStart - start;
-                            const relativeEnd = errorEnd - start;
-
-                            const nodeText = node.nodeValue;
-                            const errorWord = nodeText.substring(relativeStart, relativeEnd);
-
-                            // Если слово имеет смысл выделять
-                            if (errorWord && errorWord.trim() !== '') {
-                                // Готовим замены для подсказки
-                                const replacements = error.replacements && error.replacements.length > 0
-                                    ? error.replacements.slice(0, 3).join(', ')
-                                    : 'нет вариантов';
-
-                                // Разбиваем текст на 3 части и создаем выделение
-                                const beforeError = nodeText.substring(0, relativeStart);
-                                const afterError = nodeText.substring(relativeEnd);
-
-                                const errorSpan = document.createElement('span');
-                                errorSpan.className = 'spelling-error';
-                                errorSpan.style.color = 'red';
-                                errorSpan.style.textDecoration = 'underline wavy red';
-                                errorSpan.title = `Варианты: ${replacements}`;
-                                errorSpan.textContent = errorWord;
-
-                                const fragment = document.createDocumentFragment();
-                                if (beforeError) fragment.appendChild(document.createTextNode(beforeError));
-                                fragment.appendChild(errorSpan);
-                                if (afterError) fragment.appendChild(document.createTextNode(afterError));
-
-                                node.parentNode.replaceChild(fragment, node);
-
-                                // Обновляем карту смещений после изменения DOM
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                processedText = tempDiv.innerHTML;
+            } else {
+                console.log("Орфографических ошибок не найдено");
             }
         }
 
@@ -310,9 +280,53 @@ export class UIUpdater {
         this.contentDiv.innerHTML = processedText;
     }
 
+    // Добавляет или обновляет стили для выделения неуникальных фрагментов
+    ensureHighlightingStyles() {
+        let styleElement = document.getElementById('highlight-styles');
+
+        if (!styleElement) {
+            styleElement = document.createElement('style');
+            styleElement.id = 'highlight-styles';
+            document.head.appendChild(styleElement);
+        }
+
+        styleElement.textContent = `
+            .non-unique {
+                background-color: #FFEB3B;
+                display: inline;
+                padding: 1px 0;
+            }
+            .spelling-error {
+                color: red;
+                text-decoration: underline wavy red;
+            }
+            .info-column {
+                cursor: pointer;
+                transition: background-color 0.3s ease;
+            }
+            .info-column:hover {
+                background-color: #f0f0f0;
+            }
+            .info-column.active {
+                background-color: #e0e0e0;
+                border-left: 3px solid #4285f4;
+            }
+        `;
+    }
+
     displayResults(data) {
         console.log("Полученные данные:", data);
         this.data = data;
+
+        // Убедимся, что matched_sentences существует
+        if (!this.data.matched_sentences) {
+            this.data.matched_sentences = [];
+        }
+
+        // Убедимся, что spelling_errors существует
+        if (!this.data.spelling_errors) {
+            this.data.spelling_errors = [];
+        }
 
         const uniqueness = parseFloat(data.overall_uniqueness).toFixed(2);
         const color = TextProcessor.getUniquenessColor(uniqueness);
@@ -320,6 +334,9 @@ export class UIUpdater {
         this.uniResultsDiv.style.color = color;
 
         let outputHTML = '<h3>Результаты проверки на заимствования</h3>';
+
+        // Добавим вывод общего количества найденных неуникальных предложений
+        outputHTML += `<p>Найдено неуникальных фрагментов: ${this.data.matched_sentences.length}</p>`;
 
         if (data.file_similarity && Object.keys(data.file_similarity).length > 0) {
             outputHTML += '<h4>Найдены совпадения в файлах:</h4><ul>';
@@ -336,8 +353,8 @@ export class UIUpdater {
 
         this.resultsDiv.innerHTML = outputHTML;
 
-        const spamScore = parseFloat(data.spam_score).toFixed(2);
-        const waterScore = parseFloat(data.water_score).toFixed(2);
+        const spamScore = parseFloat(data.spam_score || 0).toFixed(2);
+        const waterScore = parseFloat(data.water_score || 0).toFixed(2);
         this.seoResultsDiv.innerHTML = `
             <p>Спамность: ${spamScore}%</p>
             <p>Водянистость: ${waterScore}%</p>
@@ -356,6 +373,7 @@ export class UIUpdater {
             spellingColumn.innerHTML = `<p>${SPELLING_MESSAGES.NO_ERRORS}</p>`;
         }
 
+        // После обновления данных обновляем отображение
         this.updateTextDisplay();
     }
 
