@@ -13,9 +13,12 @@ export class TextProcessor {
      */
     static escapeHtml(text) {
         if (!text || typeof text !== 'string') return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
     /**
@@ -27,11 +30,11 @@ export class TextProcessor {
      */
     static highlightNonUniqueText(fullText, matchedSentences) {
         if (!fullText || !matchedSentences || matchedSentences.length === 0) {
-            return this.escapeHtml(fullText);
+            return fullText; // Возвращаем уже экранированный текст
         }
 
-        // Экранируем текст для безопасного использования в HTML
-        let escapedText = this.escapeHtml(fullText);
+        // Текст уже должен быть экранирован на этом этапе
+        let processedText = fullText;
 
         // Создаем структуру для отслеживания позиций в тексте
         const positions = [];
@@ -46,7 +49,7 @@ export class TextProcessor {
 
             // Находим все вхождения предложения в тексте
             while (true) {
-                const pos = escapedText.indexOf(escapedSentence, startPos);
+                const pos = processedText.indexOf(escapedSentence, startPos);
                 if (pos === -1) break;
 
                 positions.push({
@@ -83,15 +86,15 @@ export class TextProcessor {
 
         // Вставляем HTML-теги для выделения
         nonOverlappingPositions.forEach(pos => {
-            escapedText =
-                escapedText.substring(0, pos.start) +
+            processedText =
+                processedText.substring(0, pos.start) +
                 '<span class="non-unique" style="background-color: yellow; color: black;">' +
                 pos.text +
                 '</span>' +
-                escapedText.substring(pos.end);
+                processedText.substring(pos.end);
         });
 
-        return escapedText;
+        return processedText;
     }
 
     /**

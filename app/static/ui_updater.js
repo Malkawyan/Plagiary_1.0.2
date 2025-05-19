@@ -215,8 +215,12 @@ export class UIUpdater {
     }
 
     updateTextDisplay() {
+        // Получаем оригинальный текст
         const originalText = this.contentDiv.dataset.originalText || this.contentDiv.textContent;
-        let processedText = originalText;
+
+        // Принудительно экранируем HTML в оригинальном тексте
+        let safeOriginalText = TextProcessor.escapeHtml(originalText);
+        let processedText = safeOriginalText;
 
         // Журналируем для отладки
         console.log(`Режим отображения: ${this.currentView}`);
@@ -224,10 +228,10 @@ export class UIUpdater {
         // Убедимся, что свойства CSS для выделений есть в документе
         this.ensureHighlightingStyles();
 
-        // Если данных еще нет или режим "обычный текст", просто отображаем оригинальный текст
+        // Если данных еще нет или режим "обычный текст", просто отображаем экранированный текст
         if (!this.data) {
             console.log("Данных проверки нет, отображаем оригинальный текст");
-            this.contentDiv.innerHTML = this.constructor.safeTextContent(originalText);
+            this.contentDiv.innerHTML = safeOriginalText;
             return;
         }
 
@@ -239,9 +243,9 @@ export class UIUpdater {
             // Проверяем наличие неуникальных предложений
             if (this.data.matched_sentences && this.data.matched_sentences.length > 0) {
                 console.log("Применяем выделение неуникальных фрагментов");
-                // Применяем улучшенный метод выделения
+                // Применяем улучшенный метод выделения к безопасному тексту
                 processedText = TextProcessor.highlightNonUniqueText(
-                    originalText, this.data.matched_sentences
+                    safeOriginalText, this.data.matched_sentences
                 );
             } else {
                 console.log("Неуникальных предложений не найдено");
@@ -255,19 +259,16 @@ export class UIUpdater {
 
                 // В зависимости от режима отображения
                 if (this.currentView === 'spelling') {
-                    // Для режима только орфографии - работаем с оригинальным текстом
+                    // Для режима только орфографии - работаем с экранированным текстом
                     processedText = this.highlightSpellingErrors(
-                        originalText,
+                        safeOriginalText,
                         this.data.spelling_errors
                     );
                 } else if (this.currentView === 'all') {
-                    // Для комбинированного режима сначала получаем текст без HTML-тегов
-                    // затем применяем выделение орфографии
+                    // Для комбинированного режима применяем выделение орфографии к уже обработанному тексту
                     const plainText = this.convertHtmlToPlainText(processedText);
-                    // Применяем только выделение орфографии к оригинальному тексту
-                    // и заменяем processedText результатом
                     processedText = this.highlightSpellingErrors(
-                        originalText,
+                        safeOriginalText,
                         this.data.spelling_errors
                     );
                 }
@@ -371,6 +372,12 @@ export class UIUpdater {
         } else {
             const spellingColumn = document.getElementById('spell-results');
             spellingColumn.innerHTML = `<p>${SPELLING_MESSAGES.NO_ERRORS}</p>`;
+        }
+
+        // Сохраняем оригинальный текст перед обновлением отображения
+        // Если this.contentDiv.dataset.originalText еще не установлен, используем текущий текст
+        if (!this.contentDiv.dataset.originalText) {
+            this.contentDiv.dataset.originalText = this.contentDiv.textContent;
         }
 
         // После обновления данных обновляем отображение

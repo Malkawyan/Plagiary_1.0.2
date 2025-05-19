@@ -40,7 +40,12 @@ export class FileHandler {
                 this.originalText = await this.readFileAsText(file);
             }
 
+            // Безопасно отображаем содержимое, экранируя HTML
             this.contentDiv.textContent = this.originalText;
+
+            // Сохраняем оригинальный текст в data-атрибуте для безопасного доступа
+            this.contentDiv.dataset.originalText = this.originalText;
+
             return this.originalText;
         } catch (error) {
             this.statusDiv.textContent = `${MESSAGES.FILE_PROCESSING_ERROR} ${error}`;
