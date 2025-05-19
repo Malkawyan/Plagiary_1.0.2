@@ -1,23 +1,23 @@
-/* Академический стиль для системы антиплагиата - современный и элегантный дизайн */
-
+/* Основные переменные цветов и шрифтов */
 :root {
-  --primary-color: #2c3e50;
-  --secondary-color: #3498db;
-  --accent-color: #1abc9c;
-  --error-color: #e74c3c;
-  --warning-color: #f39c12;
-  --success-color: #2ecc71;
-  --text-color: #34495e;
-  --bg-color: #f5f7fa;
-  --card-bg: #ffffff;
-  --border-radius: 12px;
-  --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  --transition: all 0.3s ease;
-  --font-main: 'Roboto', 'Arial', sans-serif;
-  --font-heading: 'Montserrat', 'Arial', sans-serif;
-  --font-content: 'Georgia', 'Times New Roman', serif;
+  --primary-color: #2c3e50;       /* Основной темно-синий цвет */
+  --secondary-color: #3498db;     /* Вторичный голубой цвет */
+  --accent-color: #1abc9c;        /* Акцентный бирюзовый цвет */
+  --error-color: #e74c3c;         /* Цвет ошибок */
+  --warning-color: #f39c12;       /* Цвет предупреждений */
+  --success-color: #2ecc71;       /* Цвет успеха */
+  --text-color: #34495e;          /* Основной цвет текста */
+  --bg-color: #f5f7fa;           /* Цвет фона страницы */
+  --card-bg: #ffffff;            /* Цвет фона карточек */
+  --border-radius: 12px;          /* Скругление углов */
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.08); /* Тень по умолчанию */
+  --transition: all 0.3s ease;   /* Параметры анимации */
+  --font-main: 'Roboto', 'Arial', sans-serif; /* Основной шрифт */
+  --font-heading: 'Montserrat', 'Arial', sans-serif; /* Шрифт заголовков */
+  --font-content: 'Georgia', 'Times New Roman', serif; /* Шрифт контента */
 }
 
+/* Базовые стили */
 * {
   margin: 0;
   padding: 0;
@@ -42,7 +42,7 @@ body {
   margin-bottom: 70px;
 }
 
-/* Стилизация заголовка */
+/* Стили заголовка */
 .header {
   text-align: center;
   margin-bottom: 40px;
@@ -72,7 +72,7 @@ body {
   letter-spacing: -0.5px;
 }
 
-/* Стилизация информационных колонок */
+/* Стили колонок с информацией */
 .info-columns {
   display: flex;
   justify-content: space-between;
@@ -141,33 +141,49 @@ body {
   border-radius: 1.5px;
 }
 
-/* Стилизация контейнера результатов внутри колонок */
-.info-column .output-container {
-  height: calc(100% - 50px);
-  overflow-y: auto;
+/* Общие стили для контейнеров с результатами */
+.output-container {
+  font-size: 14px;
   padding: 10px;
   text-align: left;
   line-height: 1.5;
-  font-size: 14px;
   color: var(--text-color);
   scrollbar-width: thin;
   scrollbar-color: var(--secondary-color) transparent;
+  overflow-y: auto;
+  background-color: var(--card-bg);
+  border-radius: var(--border-radius);
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
-.info-column .output-container::-webkit-scrollbar {
+.info-column .output-container {
+  height: calc(100% - 50px);
+}
+
+/* Основной контейнер результатов */
+#output {
+  margin-top: 25px;
+  padding: 25px;
+  min-height: 150px;
+  box-shadow: var(--shadow);
+  border-left: 5px solid var(--secondary-color) !important;
+}
+
+/* Стилизация скроллбара */
+.output-container::-webkit-scrollbar {
   width: 6px;
 }
 
-.info-column .output-container::-webkit-scrollbar-track {
+.output-container::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.info-column .output-container::-webkit-scrollbar-thumb {
+.output-container::-webkit-scrollbar-thumb {
   background-color: var(--secondary-color);
   border-radius: 3px;
 }
 
-/* Поле редактирования текста */
+/* Поле для редактирования текста */
 .editable-content {
   font-family: var(--font-content);
   font-size: 12px;
@@ -198,22 +214,13 @@ body {
   font-style: italic;
 }
 
-/* Контейнер для элементов ввода */
+/* Контейнеры для элементов управления */
 .input-container {
   display: flex;
   flex-direction: column;
   margin-bottom: 30px;
 }
 
-/* Статус загрузки файла */
-#status {
-  font-size: 14px;
-  color: var(--secondary-color);
-  margin-top: 8px;
-  font-style: italic;
-}
-
-/* Контейнер для кнопок */
 .button-container {
   display: flex;
   gap: 20px;
@@ -221,7 +228,15 @@ body {
   align-items: center;
 }
 
-/* Стилизация кнопки загрузки файла */
+/* Стили для статуса загрузки */
+#status {
+  font-size: 14px;
+  color: var(--secondary-color);
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* Стили для кнопок */
 .custom-file-input {
   position: relative;
   display: inline-block;
@@ -239,36 +254,24 @@ body {
   z-index: 10;
 }
 
-.custom-file-label {
+.custom-file-label,
+.check-btn,
+.cancel-btn {
   display: inline-block;
   padding: 15px 25px;
   font-size: 16px;
   font-weight: 500;
   color: white;
-  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
   border: none;
   border-radius: var(--border-radius);
   text-align: center;
   transition: var(--transition);
   box-shadow: 0 4px 12px rgba(44, 62, 80, 0.15);
-}
-
-.custom-file-input:hover .custom-file-label {
-  box-shadow: 0 8px 15px rgba(44, 62, 80, 0.25);
-  transform: translateY(-2px);
-}
-
-/* Стилизация кнопок */
-.check-btn, .cancel-btn {
-  padding: 15px 30px;
-  font-size: 16px;
-  font-weight: 500;
-  color: white;
-  border: none;
-  border-radius: var(--border-radius);
   cursor: pointer;
-  transition: var(--transition);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.custom-file-label {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
 }
 
 .check-btn {
@@ -279,7 +282,9 @@ body {
   background: linear-gradient(135deg, #95a5a6, #7f8c8d);
 }
 
-.check-btn:hover, .cancel-btn:hover {
+.custom-file-input:hover .custom-file-label,
+.check-btn:hover,
+.cancel-btn:hover {
   transform: translateY(-3px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
 }
@@ -289,24 +294,6 @@ body {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
-}
-
-/* Контейнер с результатами */
-.output-container {
-  font-size: 13px;
-  margin-top: 25px;
-  padding: 25px;
-  background-color: var(--card-bg);
-  border-radius: var(--border-radius);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  min-height: 150px;
-  transition: var(--transition);
-  color: inherit;
-  box-shadow: var(--shadow);
-}
-
-#output {
-  border-left: 5px solid var(--secondary-color) !important;
 }
 
 /* Индикатор загрузки */
@@ -338,11 +325,7 @@ body {
   animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: translateY(-50%) rotate(360deg); }
-}
-
-/* Подвал */
+/* Подвал страницы */
 .footer {
   background: linear-gradient(to right, var(--primary-color), #34495e);
   color: white;
@@ -357,7 +340,7 @@ body {
   border-top: 3px solid var(--secondary-color);
 }
 
-/* Стиль для выделения неуникального текста */
+/* Стили для выделения ошибок */
 .non-unique {
   color: var(--error-color);
   background-color: rgba(231, 76, 60, 0.1);
@@ -366,15 +349,16 @@ body {
   text-decoration-color: var(--error-color);
 }
 
-/* Стиль для орфографических ошибок */
-.spelling-error, .grammar-error {
+.spelling-error,
+.grammar-error {
   background-color: rgba(243, 156, 18, 0.2);
   border-bottom: 1px dashed var(--warning-color);
   cursor: help;
   position: relative;
 }
 
-.spelling-error:hover::after, .grammar-error:hover::after {
+.spelling-error:hover::after,
+.grammar-error:hover::after {
   content: attr(data-suggestions);
   position: absolute;
   bottom: 110%;
@@ -401,7 +385,7 @@ body {
   border-radius: 5px;
 }
 
-/* Стили для AI-анализа */
+/* Стили для AI анализа */
 .ai-meter {
   width: 100%;
   height: 16px;
@@ -432,8 +416,9 @@ body {
   font-style: italic;
 }
 
-/* Списки с ошибками */
-.spelling-list, .grammar-list {
+/* Стили для списков ошибок */
+.spelling-list,
+.grammar-list {
   margin-top: 15px;
   max-height: 200px;
   overflow-y: auto;
@@ -442,16 +427,65 @@ body {
   padding: 10px;
 }
 
-.spelling-item, .grammar-item {
+.spelling-item,
+.grammar-item {
   padding: 8px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   margin-bottom: 8px;
   font-size: 14px;
 }
 
-.spelling-word, .grammar-word {
+.spelling-word,
+.grammar-word {
   color: var(--error-color);
   font-weight: 600;
+}
+
+/* Стили для стилистических особенностей */
+.stylistic-features {
+  margin-top: 15px;
+  padding: 12px;
+  background-color: rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent-color);
+}
+
+.stylistic-features h4 {
+  margin-bottom: 10px;
+  color: var(--primary-color);
+}
+
+.stylistic-features p {
+  margin: 5px 0;
+  font-size: 14px;
+}
+
+.confidence-level {
+  font-style: italic;
+  margin-top: 10px;
+  color: var(--text-color);
+  opacity: 0.8;
+}
+
+.ai-detection-chunks {
+  margin-top: 20px;
+}
+
+.chunk-item {
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+.chunk-score {
+  font-weight: bold;
+  margin-right: 10px;
+}
+
+.chunk-text {
+  font-size: 14px;
+  margin-top: 5px;
 }
 
 /* Анимации */
@@ -466,14 +500,9 @@ body {
   }
 }
 
-@keyframes slideIn {
-  from {
-    transform: translateX(-30px);
-    opacity: 0;
-  }
+@keyframes spin {
   to {
-    transform: translateX(0);
-    opacity: 1;
+    transform: translateY(-50%) rotate(360deg);
   }
 }
 
@@ -514,7 +543,9 @@ body {
     align-items: stretch;
   }
 
-  .custom-file-label, .check-btn, .cancel-btn {
+  .custom-file-label,
+  .check-btn,
+  .cancel-btn {
     width: 100%;
     margin-bottom: 10px;
   }
@@ -533,50 +564,4 @@ body {
     padding: 15px 0;
     font-size: 12px;
   }
-}
-
-.stylistic-features {
-    margin-top: 15px;
-    padding: 12px;
-    background-color: rgba(0, 0, 0, 0.02);
-    border-radius: 8px;
-    border-left: 3px solid var(--accent-color);
-}
-
-.stylistic-features h4 {
-    margin-bottom: 10px;
-    color: var(--primary-color);
-}
-
-.stylistic-features p {
-    margin: 5px 0;
-    font-size: 14px;
-}
-
-.confidence-level {
-    font-style: italic;
-    margin-top: 10px;
-    color: var(--text-color);
-    opacity: 0.8;
-}
-
-.ai-detection-chunks {
-    margin-top: 20px;
-}
-
-.chunk-item {
-    padding: 10px;
-    margin-bottom: 10px;
-    border-radius: 6px;
-    background-color: rgba(0, 0, 0, 0.03);
-}
-
-.chunk-score {
-    font-weight: bold;
-    margin-right: 10px;
-}
-
-.chunk-text {
-    font-size: 14px;
-    margin-top: 5px;
 }
