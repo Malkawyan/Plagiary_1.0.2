@@ -29,10 +29,19 @@ export class FileHandler {
         try {
             // Обработка DOCX файлов с помощью библиотеки Mammoth
             if (file.name.endsWith('.docx')) {
-                // Используем глобальный объект mammoth, загруженный через тег script
-                const result = await window.mammoth.extractRawText({
+                // Добавляем обработку ошибок и таймаут
+                const mammothPromise = window.mammoth.extractRawText({
                     arrayBuffer: await this.readFileAsArrayBuffer(file)
                 });
+
+                // Добавляем таймаут к операции Mammoth для предотвращения зависания
+                const result = await Promise.race([
+                    mammothPromise,
+                    new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('Превышено время ожидания при обработке DOCX')), 30000)
+                    )
+                ]);
+
                 this.originalText = result.value;
             }
             // Обработка текстовых файлов
@@ -48,13 +57,15 @@ export class FileHandler {
 
             return this.originalText;
         } catch (error) {
-            this.statusDiv.textContent = `${MESSAGES.FILE_PROCESSING_ERROR} ${error}`;
-            throw error;
+            console.error('Ошибка обработки файла:', error);
+            this.statusDiv.textContent = `${MESSAGES.FILE_PROCESSING_ERROR} ${error.message || error}`;
+            // Возвращаем пустую строку вместо выбрасывания исключения
+            return '';
         }
     }
 
     /**
-     * Читает файл как ArrayBuffer
+     * Читает файл как ArrayBuffer с таймаутом
      * @private
      * @param {File} file - Файл для чтения
      * @returns {Promise<ArrayBuffer>}
@@ -62,14 +73,29 @@ export class FileHandler {
     readFileAsArrayBuffer(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target.result);
-            reader.onerror = (error) => reject(error);
+
+            // Добавляем таймаут для FileReader
+            const timeoutId = setTimeout(() => {
+                reader.abort(); // Прерываем операцию чтения
+                reject(new Error('Превышено время ожидания при чтении файла'));
+            }, 15000); // 15 секунд таймаут
+
+            reader.onload = (e) => {
+                clearTimeout(timeoutId);
+                resolve(e.target.result);
+            };
+
+            reader.onerror = (error) => {
+                clearTimeout(timeoutId);
+                reject(error || new Error('Ошибка чтения файла'));
+            };
+
             reader.readAsArrayBuffer(file);
         });
     }
 
     /**
-     * Читает файл как текст с учетом кодировки UTF-8
+     * Читает файл как текст с учетом кодировки UTF-8 и таймаутом
      * @private
      * @param {File} file - Файл для чтения
      * @returns {Promise<string>}
@@ -77,11 +103,28 @@ export class FileHandler {
     readFileAsText(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
+
+            // Добавляем таймаут для FileReader
+            const timeoutId = setTimeout(() => {
+                reader.abort(); // Прерываем операцию чтения
+                reject(new Error('Превышено время ожидания при чтении файла'));
+            }, 15000); // 15 секунд таймаут
+
             reader.onload = (e) => {
-                const decoder = new TextDecoder('utf-8');
-                resolve(decoder.decode(e.target.result));
+                clearTimeout(timeoutId);
+                try {
+                    const decoder = new TextDecoder('utf-8');
+                    resolve(decoder.decode(e.target.result));
+                } catch (error) {
+                    reject(error || new Error('Ошибка декодирования файла'));
+                }
             };
-            reader.onerror = (error) => reject(error);
+
+            reader.onerror = (error) => {
+                clearTimeout(timeoutId);
+                reject(error || new Error('Ошибка чтения файла'));
+            };
+
             reader.readAsArrayBuffer(file);
         });
     }
