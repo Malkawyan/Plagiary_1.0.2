@@ -5,27 +5,7 @@ from typing import List, Union, Tuple
 import numpy as np
 from collections import Counter
 import re
-
-
-def process_text_chunks(text: str, chunk_size: int = 400) -> List[str]:
-    """Улучшенное разбиение текста на чанки с сохранением целостности предложений"""
-    sentences = []
-    current_sentence = []
-    current_length = 0
-
-    # Временное разбиение на предложения
-    for token in text.split():
-        if len(token) + current_length > chunk_size and current_sentence:
-            sentences.append(' '.join(current_sentence))
-            current_sentence = []
-            current_length = 0
-        current_sentence.append(token)
-        current_length += len(token) + 1
-
-    if current_sentence:
-        sentences.append(' '.join(current_sentence))
-
-    return sentences
+from .text_utils import split_text_into_chunks
 
 
 def calculate_repetition_score(text: str) -> float:
@@ -59,7 +39,7 @@ def ensemble_prediction(text: str) -> float:
     ]
 
     predictions = []
-    chunks = process_text_chunks(text)
+    chunks = split_text_into_chunks(text)
 
     for model, tokenizer, weight in models:
         device = next(model.parameters()).device
@@ -173,7 +153,7 @@ def detect_ai_text(text: Union[str, List[str]], batch_size: int = 4, show_progre
 
 def get_detailed_analysis(text: str) -> dict:
     """Детализированный анализ с разбивкой по чанкам и стилистическими маркерами"""
-    chunks = process_text_chunks(text)
+    chunks = split_text_into_chunks(text)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Основные метрики
