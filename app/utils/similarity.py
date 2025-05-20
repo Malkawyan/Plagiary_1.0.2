@@ -10,22 +10,30 @@ def calculate_similarity_matrix(uploaded_embeddings, base_embeddings):
     Вычисляет матрицу косинусного сходства между загруженными эмбеддингами и базой.
     :param uploaded_embeddings: список эмбеддингов загруженного текста.
     :param base_embeddings: словарь, где ключ — имя файла, значение — список эмбеддингов.
-    :return: матрица сходств в виде numpy массива.
+    :return: матрица сходств в виде numpy массива и список файлов, соответствующих каждому эмбеддингу.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # Определяем, доступна ли CUDA
 
     # Проверяем, что у нас есть эмбеддинги для обработки
     if not uploaded_embeddings or not base_embeddings:
-        return np.array([])
+        return np.array([]), []
+
+    # Создаем список файлов для каждого эмбеддинга
+    base_files = []
+    base_embeddings_list = []
+
+    for file_name, embeddings in base_embeddings.items():
+        for emb in embeddings:
+            base_embeddings_list.append(emb)
+            base_files.append(file_name)
 
     # Преобразуем списки эмбеддингов в единые NumPy-массивы перед созданием тензоров
     uploaded_embeddings = np.array(uploaded_embeddings, dtype=np.float32)
-    base_embeddings_list = [emb for embeddings in base_embeddings.values() for emb in embeddings]
     base_embeddings_array = np.array(base_embeddings_list, dtype=np.float32)
 
     # Проверяем что массивы не пусты
     if uploaded_embeddings.size == 0 or base_embeddings_array.size == 0:
-        return np.array([])
+        return np.array([]), []
 
     # Создаём тензоры PyTorch и перемещаем на устройство (GPU, если доступен)
     uploaded = torch.tensor(uploaded_embeddings, device=device)
@@ -51,48 +59,92 @@ def calculate_similarity_matrix(uploaded_embeddings, base_embeddings):
             norm_uploaded * norm_all_base
     )
 
-    return similarity_matrix.cpu().numpy()  # Переносим обратно на CPU для дальнейшей обработки
+    return similarity_matrix.cpu().numpy(), base_files  # Возвращаем и матрицу, и список файлов
 
 
-def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, sentences, threshold=70):
+def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, sentences, threshold=70,
+                                        min_file_similarity=1.0):
     """
     Вычисляет общую уникальность текста и проценты заимствования для каждого файла.
     :param uploaded_embeddings: список эмбеддингов загруженного текста.
     :param base_embeddings: словарь с эмбеддингами базы (ключ — имя файла, значение — список эмбеддингов).
     :param sentences: список всех предложений загруженного текста.
-    :param threshold: порог сходства (снижен с 70% до 60% для более чувствительного обнаружения).
-    :return: кортеж (общая уникальность, словарь с процентами заимствования для каждого файла, список неуникальных предложений).
+    :param threshold: порог сходства (в процентах).
+    :param min_file_similarity: минимальный процент заимствования из файла, чтобы включить его в результат (по умолчанию 1%).
+    :return: кортеж (общая уникальность, словарь с процентами заимствования для каждого файла,
+             список неуникальных предложений, словарь детальных процентов сходства).
     """
     total_sentences = len(uploaded_embeddings)
     if total_sentences == 0:
-        return 100, {}, []
+        return 100, {}, [], {}
 
-    similarity_matrix = calculate_similarity_matrix(uploaded_embeddings, base_embeddings)
+    # Получаем матрицу сходства и список файлов, соответствующих каждому эмбеддингу
+    similarity_matrix, base_files = calculate_similarity_matrix(uploaded_embeddings, base_embeddings)
 
     # Проверка на пустую матрицу
     if similarity_matrix.size == 0:
-        return 100, {}, []
+        return 100, {}, [], {}
 
-    unique_sentences = 0
-    file_similarity = {file_name: 0 for file_name in base_embeddings.keys()}
-    matched_sentences = []
+    # Счетчики для уникальных предложений и заимствований
+    unique_count = 0
+    file_matches = {}  # словарь для подсчета заимствований по файлам
+    matched_sentences = []  # список неуникальных предложений
 
-    base_files = [file for file, embeddings in base_embeddings.items() for _ in embeddings]
+    # Словарь для хранения детальной информации о сходстве с каждым файлом
+    file_similarity_details = {}
 
+    # Инициализируем счетчики заимствований для каждого файла
+    for file_name in base_embeddings.keys():
+        file_matches[file_name] = 0
+        file_similarity_details[file_name] = []
+
+    # Обрабатываем каждое предложение
     for i, row in enumerate(similarity_matrix):
+        # Для каждого файла находим максимальное сходство
+        file_to_max_similarity = {}
+
+        for j, similarity in enumerate(row):
+            file_name = base_files[j]
+            similarity_percent = similarity * 100
+
+            # Обновляем максимальное сходство для данного файла, если оно выше
+            if file_name not in file_to_max_similarity or similarity_percent > file_to_max_similarity[file_name]:
+                file_to_max_similarity[file_name] = similarity_percent
+
+        # Добавляем информацию о максимальном сходстве каждого предложения с каждым файлом
+        for file_name, similarity_percent in file_to_max_similarity.items():
+            file_similarity_details[file_name].append(similarity_percent)
+
+        # Находим максимальное сходство для текущего предложения среди всех файлов
         max_similarity = max(row) * 100
         if max_similarity > threshold:
-            file_similarity[base_files[row.argmax()]] += 1
+            # Находим индекс максимального значения сходства
+            max_index = row.argmax()
+            # Определяем файл, с которым обнаружено максимальное сходство
+            matched_file = base_files[max_index]
+            # Увеличиваем счетчик заимствований для этого файла
+            file_matches[matched_file] += 1
+            # Добавляем предложение в список неуникальных
             matched_sentences.append(sentences[i])
         else:
-            unique_sentences += 1
+            # Предложение уникально
+            unique_count += 1
 
-    overall_uniqueness = (unique_sentences / total_sentences) * 100
+    # Вычисляем общую уникальность
+    overall_uniqueness = (unique_count / total_sentences) * 100
 
-    for file_name in file_similarity:
-        file_similarity[file_name] = (file_similarity[file_name] / total_sentences) * 100
+    # Преобразуем счетчики заимствований в проценты и фильтруем по минимальному порогу
+    file_similarity = {}
+    for file_name, count in file_matches.items():
+        percent = (count / total_sentences) * 100
+        if percent >= min_file_similarity:
+            file_similarity[file_name] = percent
 
-    # Сохраняем все файлы с ненулевым совпадением
-    file_similarity = {file: sim for file, sim in file_similarity.items() if sim > 0}
+    # Вычисляем средний процент сходства для каждого файла
+    avg_file_similarity = {}
+    for file_name, similarities in file_similarity_details.items():
+        if similarities:  # Проверка на непустой список
+            avg_similarity = sum(similarities) / len(similarities)
+            avg_file_similarity[file_name] = avg_similarity
 
-    return overall_uniqueness, file_similarity, matched_sentences
+    return overall_uniqueness, file_similarity, matched_sentences, avg_file_similarity

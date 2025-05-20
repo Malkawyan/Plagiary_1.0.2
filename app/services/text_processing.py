@@ -76,7 +76,7 @@ def process_text(text: str, language: str) -> dict:
     base_sentences = _get_base_sentences_cache()
 
     # Сравнение с базой документов
-    overall_uniqueness, file_similarity, matched_sentences = calculate_uniqueness_and_similarity(
+    overall_uniqueness, file_similarity, matched_sentences, avg_file_similarity = calculate_uniqueness_and_similarity(
         uploaded_embeddings, base_sentences, sentences
     )
 
