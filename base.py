@@ -21,7 +21,7 @@ nlp_ru = spacy.load("ru_core_news_lg")
 # Константы
 MAX_TOKENS = 512  # Максимальное количество токенов для модели
 DATA_FOLDER = 'uploads'
-BASE_FOLDER = 'base'
+BASE_FOLDER = '../base'
 os.makedirs(BASE_FOLDER, exist_ok=True)
 
 
