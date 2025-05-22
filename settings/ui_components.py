@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QDialog, QSlider, QGroupBox, QMessageBox,
                              QFrame, QSizePolicy)
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QFont, QPalette, QColor, QIcon
+from PyQt5.QtGui import QFont, QPalette, QColor, QIcon, QPixmap
 from settings import load_settings, save_settings, update_similarity_threshold
 from file_operations import load_files
 from processing import process_selected_files
@@ -180,9 +180,17 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(title_widget)
         header_layout.addStretch()
 
-        # Кнопка настроек в шапке
+        # Кнопка настроек в шапке с пользовательской иконкой
         self.settings_button = QPushButton()
-        self.settings_button.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
+
+        # Попытка загрузить пользовательскую иконку
+        settings_icon = self._load_settings_icon()
+        if settings_icon:
+            self.settings_button.setIcon(settings_icon)
+        else:
+            # Если пользовательская иконка недоступна, используем стандартную
+            self.settings_button.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
+
         self.settings_button.setIconSize(QSize(24, 24))
         self.settings_button.setFixedSize(40, 40)
         self.settings_button.setToolTip("Настройки")
@@ -322,6 +330,27 @@ class MainWindow(QMainWindow):
         self.deselect_all_button.clicked.connect(self._deselect_all_files)
         self.process_button.clicked.connect(lambda: self._process_files())
 
+    def _load_settings_icon(self):
+        """Загружает пользовательскую иконку настроек"""
+        # Список возможных имен файлов иконки
+        icon_names = ['settings.png', 'gear.png', 'config.png', 'настройки.png']
+
+        for icon_name in icon_names:
+            if os.path.exists(icon_name):
+                try:
+                    pixmap = QPixmap(icon_name)
+                    if not pixmap.isNull():
+                        # Масштабируем иконку до нужного размера с сохранением пропорций
+                        scaled_pixmap = pixmap.scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                        return QIcon(scaled_pixmap)
+                except Exception as e:
+                    print(f"Ошибка загрузки иконки {icon_name}: {e}")
+                    continue
+
+        # Если не удалось загрузить пользовательскую иконку
+        print("Пользовательская иконка не найдена. Используется стандартная иконка.")
+        return None
+
     def _select_all_files(self):
         for i in range(self.file_list_layout.count()):
             widget = self.file_list_layout.itemAt(i).widget()
@@ -372,7 +401,7 @@ class MainWindow(QMainWindow):
         StyleHelper.style_groupbox(threshold_group)
         threshold_layout = QVBoxLayout()
 
-        info_label = QLabel("Порог схожости определяет, при каком проценте схожести "
+        info_label = QLabel("Порог схожести определяет, при каком проценте схожести "
                             "предложение считается неуникальным. Меньшее значение делает "
                             "поиск более строгим и увеличивает количество совпадений.")
         info_label.setWordWrap(True)
