@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QFont, QPalette, QColor, QIcon, QPixmap
 from settings import load_settings, save_settings, update_similarity_threshold
-from file_operations import load_files
+from file_operations import load_files, add_external_file
 from processing import process_selected_files
 
 
@@ -264,14 +264,24 @@ class MainWindow(QMainWindow):
 
         self.select_all_button = QPushButton("Выбрать все")
         self.deselect_all_button = QPushButton("Убрать все")
+        self.add_file_button = QPushButton("Добавить файл")
         self.process_button = QPushButton("Загрузить")
+
+        # Добавляем иконку для кнопки добавления файла
+        add_file_icon = self.style().standardIcon(QStyle.SP_DirOpenIcon)
+        self.add_file_button.setIcon(add_file_icon)
 
         StyleHelper.setup_button(self.select_all_button, primary=False)
         StyleHelper.setup_button(self.deselect_all_button, primary=False)
+        StyleHelper.setup_button(self.add_file_button, primary=False)
         StyleHelper.setup_button(self.process_button, primary=True)
+
+        # Добавляем всплывающую подсказку
+        self.add_file_button.setToolTip("Добавить .docx файл из проводника")
 
         buttons_layout.addWidget(self.select_all_button)
         buttons_layout.addWidget(self.deselect_all_button)
+        buttons_layout.addWidget(self.add_file_button)
         buttons_layout.addStretch()
         buttons_layout.addWidget(self.process_button)
 
@@ -299,8 +309,8 @@ class MainWindow(QMainWindow):
         info_box_layout.addWidget(info_text)
 
         help_text = QLabel(
-            "Для настройки порога схожести используйте кнопку настроек в правом "
-            "верхнем углу приложения."
+            "Для добавления новых файлов используйте кнопку 'Добавить файл'. "
+            "Для настройки порога схожести используйте кнопку настроек."
         )
         help_text.setWordWrap(True)
         help_text.setFont(StyleHelper.NORMAL_FONT)
@@ -328,6 +338,7 @@ class MainWindow(QMainWindow):
         # Подключение сигналов
         self.select_all_button.clicked.connect(self._select_all_files)
         self.deselect_all_button.clicked.connect(self._deselect_all_files)
+        self.add_file_button.clicked.connect(self._add_external_file)
         self.process_button.clicked.connect(lambda: self._process_files())
 
     def _load_settings_icon(self):
@@ -366,6 +377,15 @@ class MainWindow(QMainWindow):
                 widget.checkbox.setChecked(False)
         self.statusbar.showMessage('Выбор всех файлов отменен')
         self.status_label.setText('Выбор файлов отменен')
+
+    def _add_external_file(self):
+        """Вызывает функцию добавления внешнего файла"""
+        self.status_label.setText('Добавление файла...')
+        success = add_external_file(self)
+        if success:
+            self.status_label.setText('Файл успешно добавлен')
+        else:
+            self.status_label.setText('Ожидание выбора файлов')
 
     def _process_files(self):
         self.status_label.setText('Обработка файлов...')
