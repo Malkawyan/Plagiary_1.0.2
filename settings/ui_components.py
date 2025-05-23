@@ -389,15 +389,33 @@ class MainWindow(QMainWindow):
 
     def _process_files(self):
         """Запускает обработку выбранных файлов"""
+        # Отключаем кнопку во время обработки
+        self.process_button.setEnabled(False)
+        self.process_button.setText("Обработка...")
+
         self.status_label.setText('Обработка файлов...')
+
         try:
+            from processing import process_selected_files
+
+            # Создаем функцию для восстановления кнопки после обработки
+            def restore_button():
+                self.process_button.setEnabled(True)
+                self.process_button.setText("Загрузить")
+
+            # Сохраняем ссылку на функцию восстановления
+            self._restore_button = restore_button
+
             process_selected_files(self.file_list_layout, self.statusbar, self)
-            # Статус обновляется внутри process_selected_files
+
         except Exception as e:
             import logging
             logging.error(f"Ошибка при обработке файлов: {e}")
             self.status_label.setText('Ошибка при обработке файлов')
             self.statusbar.showMessage('Ошибка при обработке файлов')
+            # Восстанавливаем кнопку в случае ошибки
+            self.process_button.setEnabled(True)
+            self.process_button.setText("Загрузить")
 
     def _show_settings_dialog(self):
         settings = load_settings()
