@@ -3,10 +3,11 @@ import time
 import logging
 import shutil
 
-from PyQt5 import Qt
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QProgressDialog, QMessageBox
 from base import process_docx_file, save_embeddings_to_file, BASE_FOLDER
 from settings import UPLOADS_DIR, BACKUP_DIR
+
 
 def process_selected_files(file_list_layout, statusbar, main_window):
     """Обработать выбранные файлы и конвертировать их в эмбеддинги"""
@@ -70,8 +71,10 @@ def process_selected_files(file_list_layout, statusbar, main_window):
 
             if count > 0:
                 save_embeddings_to_file(embeddings, output_path)
+                # Создаем резервную копию файла
                 backup_path = os.path.join(BACKUP_DIR, filename)
                 shutil.copy2(file_path, backup_path)
+                # Удаляем файл из uploads только после успешного создания резервной копии
                 os.remove(file_path)
                 processed_count += 1
 
@@ -93,18 +96,52 @@ def process_selected_files(file_list_layout, statusbar, main_window):
 
     progress.setValue(len(selected_files))
 
-    msg_box = QMessageBox(main_window)
-    msg_box.setWindowTitle("Результат обработки")
-    msg_box.setIcon(QMessageBox.Information)
+    # Показываем результат обработки
+    show_processing_results(main_window, processed_count, len(selected_files), skipped_count, processed_details)
 
-    summary_text = f"Обработано файлов: {processed_count} из {len(selected_files)}\n"
-    summary_text += f"Пропущено (уже обработаны): {skipped_count}\n\nДетали обработки:"
-    for detail in processed_details:
-        summary_text += f"\n• {detail}"
-
-    msg_box.setText(summary_text)
-    msg_box.setStandardButtons(QMessageBox.Ok)
+    # Обновляем список файлов после обработки
+    try:
+        from file_operations import load_files
+        load_files(
+            main_window.file_list_layout,
+            main_window.process_button,
+            main_window.select_all_button,
+            main_window.deselect_all_button,
+            main_window.statusbar
+        )
+        # Обновляем статус в интерфейсе
+        main_window.update_status('Обработка завершена')
+        logging.info("Список файлов обновлен после обработки")
+    except Exception as e:
+        logging.error(f"Ошибка при обновлении списка файлов: {e}")
+        main_window.update_status('Обработка завершена (ошибка обновления списка)')
 
     logging.info(f"Завершена обработка. Успешно: {processed_count}/{len(selected_files)}, пропущено: {skipped_count}")
-    statusbar.showMessage(f'Обработано: {processed_count}, пропущено: {skipped_count}')
-    msg_box.exec_()
+
+
+def show_processing_results(parent, processed_count, total_files, skipped_count, processed_details):
+    """Показывает результаты обработки файлов"""
+    try:
+        msg_box = QMessageBox(parent)
+        msg_box.setWindowTitle("Результат обработки")
+        msg_box.setIcon(QMessageBox.Information)
+
+        summary_text = f"Обработано файлов: {processed_count} из {total_files}\n"
+        summary_text += f"Пропущено (уже обработаны): {skipped_count}\n\nДетали обработки:"
+
+        for detail in processed_details:
+            summary_text += f"\n• {detail}"
+
+        msg_box.setText(summary_text)
+        msg_box.setStandardButtons(QMessageBox.Ok)
+
+        # Устанавливаем размер окна сообщения
+        msg_box.setMinimumWidth(500)
+
+        parent.statusbar.showMessage(f'Обработано: {processed_count}, пропущено: {skipped_count}')
+        msg_box.exec_()
+
+    except Exception as e:
+        logging.error(f"Ошибка при показе результатов: {e}")
+        # Fallback - показываем простое сообщение
+        parent.statusbar.showMessage(f'Обработано: {processed_count}/{total_files}, пропущено: {skipped_count}')

@@ -339,7 +339,7 @@ class MainWindow(QMainWindow):
         self.select_all_button.clicked.connect(self._select_all_files)
         self.deselect_all_button.clicked.connect(self._deselect_all_files)
         self.add_file_button.clicked.connect(self._add_external_file)
-        self.process_button.clicked.connect(lambda: self._process_files())
+        self.process_button.clicked.connect(self._process_files)
 
     def _load_settings_icon(self):
         """Загружает пользовательскую иконку настроек"""
@@ -388,9 +388,16 @@ class MainWindow(QMainWindow):
             self.status_label.setText('Ожидание выбора файлов')
 
     def _process_files(self):
+        """Запускает обработку выбранных файлов"""
         self.status_label.setText('Обработка файлов...')
-        process_selected_files(self.file_list_layout, self.statusbar, self)
-        self.status_label.setText('Обработка завершена')
+        try:
+            process_selected_files(self.file_list_layout, self.statusbar, self)
+            # Статус обновляется внутри process_selected_files
+        except Exception as e:
+            import logging
+            logging.error(f"Ошибка при обработке файлов: {e}")
+            self.status_label.setText('Ошибка при обработке файлов')
+            self.statusbar.showMessage('Ошибка при обработке файлов')
 
     def _show_settings_dialog(self):
         settings = load_settings()
