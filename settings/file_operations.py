@@ -6,13 +6,25 @@ from PyQt5.QtWidgets import QWidget, QHBoxLayout, QCheckBox, QLabel, QFileDialog
 
 
 def create_file_item(filename):
-    """Создает виджет для отображения файла с чекбоксом"""
+    """Создает виджет для отображения файла с чекбоксом (стилизованная версия)"""
+    from ui_components import StyleHelper
+
     widget = QWidget()
+    widget.setMinimumHeight(40)  # Увеличенная высота элемента
     layout = QHBoxLayout()
-    layout.setContentsMargins(5, 2, 5, 2)
+    layout.setContentsMargins(10, 8, 10, 8)
 
     checkbox = QCheckBox()
+    StyleHelper.style_checkbox(checkbox)  # Применяем стиль к чекбоксу
+
     label = QLabel(filename)
+    label.setFont(StyleHelper.NORMAL_FONT)
+    label.setStyleSheet(f"""
+        QLabel {{
+            color: {StyleHelper.TEXT_COLOR};
+            padding: 5px;
+        }}
+    """)
 
     layout.addWidget(checkbox)
     layout.addWidget(label)
@@ -21,6 +33,20 @@ def create_file_item(filename):
     widget.setLayout(layout)
     widget.checkbox = checkbox
     widget.filename = filename
+
+    # Добавляем стиль к виджету элемента
+    widget.setStyleSheet(f"""
+        QWidget {{
+            background-color: white;
+            border: 1px solid {StyleHelper.LIGHT_COLOR};
+            border-radius: 6px;
+            margin: 2px;
+        }}
+        QWidget:hover {{
+            background-color: {StyleHelper.BG_COLOR};
+            border-color: {StyleHelper.SECONDARY_COLOR};
+        }}
+    """)
 
     return widget
 
@@ -101,6 +127,7 @@ def add_external_file(main_window):
 def load_files(file_list_layout, process_button, select_all_button, deselect_all_button, statusbar):
     """Загружает все .docx файлы из папки uploads и отображает их"""
     from settings import UPLOADS_DIR
+    from ui_components import StyleHelper
 
     # Очищаем существующие элементы
     for i in reversed(range(file_list_layout.count())):
@@ -119,6 +146,16 @@ def load_files(file_list_layout, process_button, select_all_button, deselect_all
     if not docx_files:
         empty_label = QLabel("Нет файлов .docx в папке uploads")
         empty_label.setAlignment(Qt.AlignCenter)
+        empty_label.setFont(StyleHelper.NORMAL_FONT)
+        empty_label.setStyleSheet(f"""
+            QLabel {{
+                color: {StyleHelper.TEXT_COLOR};
+                padding: 20px;
+                background-color: {StyleHelper.BG_COLOR};
+                border-radius: 8px;
+                border: 1px solid {StyleHelper.LIGHT_COLOR};
+            }}
+        """)
         file_list_layout.addWidget(empty_label)
         process_button.setEnabled(False)
         select_all_button.setEnabled(False)
