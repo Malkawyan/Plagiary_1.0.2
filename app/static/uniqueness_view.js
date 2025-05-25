@@ -36,14 +36,25 @@ export class UniquenessView {
 
         // Отображаем информацию о совпадениях с файлами
         if (data.file_similarity && Object.keys(data.file_similarity).length > 0) {
-            outputHTML += '<h4>Найдены совпадения в файлах:</h4><ul>';
+            // Сортируем файлы по проценту заимствования в убывающем порядке
+            const sortedFiles = Object.entries(data.file_similarity)
+                .sort(([,a], [,b]) => parseFloat(b) - parseFloat(a))
+                .slice(0, 7); // Берем только первые 7 файлов
 
-            for (const [filename, similarity] of Object.entries(data.file_similarity)) {
+            outputHTML += '<h4>Найдены совпадения в файлах (топ-7):</h4><ul>';
+
+            for (const [filename, similarity] of sortedFiles) {
                 const roundedSimilarity = parseFloat(similarity).toFixed(2);
                 outputHTML += `<li>${TextProcessor.escapeHtml(filename)}: ${roundedSimilarity}% совпадений</li>`;
             }
 
             outputHTML += '</ul>';
+
+            // Если файлов больше 7, добавляем информацию об этом
+            const totalFiles = Object.keys(data.file_similarity).length;
+            if (totalFiles > 7) {
+                outputHTML += `<p class="additional-files-info">И еще ${totalFiles - 7} файл(ов) с меньшим процентом заимствования</p>`;
+            }
         } else {
             outputHTML += '<p>Прямые заимствования не обнаружены</p>';
         }
