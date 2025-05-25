@@ -66,15 +66,47 @@ def calculate_similarity_matrix(uploaded_embeddings, base_embeddings, batch_size
     return similarity_matrix, base_files
 
 
+def calculate_text_statistics(sentences):
+    """
+    Вычисляет статистику текста для каждого предложения.
+    :param sentences: список предложений
+    :return: словарь со статистикой
+    """
+    stats = {
+        'sentence_lengths': [],  # длина каждого предложения в символах
+        'sentence_word_counts': [],  # количество слов в каждом предложении
+        'total_chars': 0,  # общее количество символов
+        'total_words': 0  # общее количество слов
+    }
+
+    for sentence in sentences:
+        # Убираем лишние пробелы и считаем символы
+        clean_sentence = sentence.strip()
+        char_count = len(clean_sentence)
+
+        # Считаем слова (разделяем по пробелам и фильтруем пустые)
+        words = [word for word in clean_sentence.split() if word.strip()]
+        word_count = len(words)
+
+        stats['sentence_lengths'].append(char_count)
+        stats['sentence_word_counts'].append(word_count)
+        stats['total_chars'] += char_count
+        stats['total_words'] += word_count
+
+    return stats
+
+
 def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, sentences, threshold=70,
                                         min_file_similarity=1.0):
     """
     Вычисляет общую уникальность текста и проценты заимствования для каждого файла.
+    Учитывает объем заимствованного текста, а не только количество предложений.
+
     :param uploaded_embeddings: список эмбеддингов загруженного текста.
     :param base_embeddings: словарь с эмбеддингами базы (ключ — имя файла, значение — список эмбеддингов).
     :param sentences: список всех предложений загруженного текста.
     :param threshold: порог сходства (в процентах).
-    :param min_file_similarity: минимальный процент заимствования из файла, чтобы включить его в результат (по умолчанию 1%).
+    :param min_file_similarity: минимальный процент заимствования из файла, чтобы включить его в результат.
     :return: кортеж (общая уникальность, словарь с процентами заимствования для каждого файла,
              список неуникальных предложений, словарь детальных процентов сходства).
     """
@@ -82,29 +114,41 @@ def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, se
     if total_sentences == 0:
         return 100, {}, [], {}
 
+    # Получаем статистику текста
+    text_stats = calculate_text_statistics(sentences)
+
+    if text_stats['total_chars'] == 0:
+        return 100, {}, [], {}
+
     similarity_matrix, base_files = calculate_similarity_matrix(uploaded_embeddings, base_embeddings)
 
     if similarity_matrix.size == 0:
         return 100, {}, [], {}
 
-    unique_count = 0
-    file_matches = {}  # счетчик заимствований по файлам
+    # Переменные для подсчета заимствований
+    file_borrowed_chars = {}  # количество заимствованных символов по файлам
+    file_borrowed_weighted = {}  # взвешенный объем заимствований (учитывает степень сходства)
     matched_sentences = []
     file_similarity_details = {}
 
+    total_borrowed_chars = 0  # общий объем заимствованного текста в символах
+    total_borrowed_weighted = 0  # общий взвешенный объем заимствований
+
     # Инициализируем счетчики для каждого файла
     for file_name in base_embeddings.keys():
-        file_matches[file_name] = 0
+        file_borrowed_chars[file_name] = 0
+        file_borrowed_weighted[file_name] = 0.0
         file_similarity_details[file_name] = []
 
     # Обрабатываем каждое предложение
     for i, row in enumerate(similarity_matrix):
+        sentence_chars = text_stats['sentence_lengths'][i]
+
         # Для каждого файла находим максимальное сходство среди его эмбеддингов
         file_to_max_similarity = {}
 
         for j, similarity in enumerate(row):
             file_name = base_files[j]
-            # Преобразуем в стандартный Python float
             similarity_percent = float(similarity * 100)
 
             if file_name not in file_to_max_similarity or similarity_percent > file_to_max_similarity[file_name]:
@@ -112,39 +156,63 @@ def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, se
 
         # Сохраняем максимальное сходство с каждым файлом для этого предложения
         for file_name, similarity_percent in file_to_max_similarity.items():
-            # Преобразуем в стандартный Python float
             file_similarity_details[file_name].append(float(similarity_percent))
 
-        # Находим общее максимальное сходство для определения уникальности
+        # Находим общее максимальное сходство для определения заимствований
         max_similarity = float(max(row) * 100)
+
         if max_similarity > threshold:
+            # Это заимствованное предложение
             max_index = row.argmax()
             matched_file = base_files[max_index]
-            file_matches[matched_file] += 1
             matched_sentences.append(sentences[i])
-        else:
-            unique_count += 1
 
-    # Вычисляем общую уникальность
-    overall_uniqueness = (unique_count / total_sentences) * 100
+            # Добавляем к общему объему заимствований
+            total_borrowed_chars += sentence_chars
 
-    # ИСПРАВЛЕНИЕ: Вычисляем среднее сходство для каждого файла вместо доли предложений
+            # Взвешенное заимствование учитывает степень сходства
+            # Например, предложение с 95% сходством "весит" больше, чем с 71%
+            similarity_weight = (max_similarity - threshold) / (100 - threshold)
+            weighted_chars = sentence_chars * similarity_weight
+            total_borrowed_weighted += weighted_chars
+
+            # Добавляем к файлу-источнику
+            file_borrowed_chars[matched_file] += sentence_chars
+            file_borrowed_weighted[matched_file] += weighted_chars
+
+    # Вычисляем уникальность на основе объема текста, а не количества предложений
+    # Используем взвешенный подход для более точной оценки
+    uniqueness_by_chars = ((text_stats['total_chars'] - total_borrowed_chars) / text_stats['total_chars']) * 100
+    uniqueness_weighted = ((text_stats['total_chars'] - total_borrowed_weighted) / text_stats['total_chars']) * 100
+
+    # Берем среднее между двумя подходами для более сбалансированной оценки
+    overall_uniqueness = (uniqueness_by_chars + uniqueness_weighted) / 2
+
+    # Вычисляем проценты заимствования по файлам
     file_similarity = {}
     avg_file_similarity = {}
 
     for file_name, similarities in file_similarity_details.items():
         if similarities:
-            # Средний процент сходства со всеми предложениями
+            # Средний процент сходства (для совместимости со старой версией)
             avg_similarity = sum(similarities) / len(similarities)
-            # Преобразуем в стандартный Python float для JSON сериализации
-            avg_similarity = float(avg_similarity)
-            avg_file_similarity[file_name] = avg_similarity
+            avg_file_similarity[file_name] = float(avg_similarity)
 
-            # Для file_similarity используем среднее сходство, если оно превышает порог
-            if avg_similarity >= min_file_similarity:
-                file_similarity[file_name] = avg_similarity
+            # Новый подход: процент заимствованного текста из этого файла
+            if file_borrowed_chars[file_name] > 0:
+                # Простой подход: доля символов, заимствованных из файла
+                chars_percentage = (file_borrowed_chars[file_name] / text_stats['total_chars']) * 100
 
-    # Убеждаемся, что overall_uniqueness тоже стандартный Python тип
-    overall_uniqueness = float(overall_uniqueness)
+                # Взвешенный подход: учитывает степень сходства
+                weighted_percentage = (file_borrowed_weighted[file_name] / text_stats['total_chars']) * 100
+
+                # Берем максимум из двух подходов для более консервативной оценки
+                final_percentage = max(chars_percentage, weighted_percentage)
+
+                if final_percentage >= min_file_similarity:
+                    file_similarity[file_name] = float(final_percentage)
+
+    # Убеждаемся, что значения в допустимых пределах
+    overall_uniqueness = max(0.0, min(100.0, float(overall_uniqueness)))
 
     return overall_uniqueness, file_similarity, matched_sentences, avg_file_similarity

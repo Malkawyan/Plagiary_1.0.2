@@ -43,7 +43,7 @@ def process_text(text: str, language: str) -> dict:
     1. Анализ водянистости и спамности текста
     2. Преобразование текста в эмбеддинги
     3. Сравнение с базой документов
-    4. Расчет уникальности
+    4. Расчет уникальности с учетом объема заимствованного текста
 
     Args:
         text (str): Входной текст для анализа
@@ -51,17 +51,19 @@ def process_text(text: str, language: str) -> dict:
 
     Returns:
         dict: Результаты анализа с ключами:
-            - overall_uniqueness: процент уникальности
-            - file_similarity: сходство с другими файлами
+            - overall_uniqueness: процент уникальности (учитывает объем текста)
+            - file_similarity: процент заимствований из каждого файла (по объему)
             - water_score: показатель водянистости
             - spam_score: показатель спамности
-            - matched_indices: индексы совпавших предложений
+            - matched_sentences: список заимствованных предложений
+            - ai_text_detected: результат анализа на ИИ
+            - spelling_errors: орфографические ошибки
     """
     # SEO-анализ текста
     water_score = calculate_wateriness(text)  # Расчет водянистости
     spam_score = calculate_spamminess(text)  # Расчет спамности
 
-    #Анализ текста на написание ИИ
+    # Анализ текста на написание ИИ
     ai_text_detected = detect_ai_text(text)
 
     # Получаем и эмбеддинги, и список предложений
@@ -75,18 +77,28 @@ def process_text(text: str, language: str) -> dict:
     # Получаем кэшированные эмбеддинги базы документов
     base_sentences = _get_base_sentences_cache()
 
-    # Сравнение с базой документов
+    # Сравнение с базой документов (теперь с улучшенным алгоритмом)
     overall_uniqueness, file_similarity, matched_sentences, avg_file_similarity = calculate_uniqueness_and_similarity(
         uploaded_embeddings, base_sentences, sentences
     )
 
+    # Добавляем дополнительную информацию для отладки и аналитики
+    text_stats = {
+        'total_sentences': len(sentences),
+        'total_chars': len(text.strip()),
+        'total_words': len(text.split()),
+        'borrowed_sentences_count': len(matched_sentences)
+    }
+
     # Формируем итоговый результат
     return {
-        "overall_uniqueness": f"{overall_uniqueness:.2f}%",  # Форматируем проценты
-        "file_similarity": file_similarity,  # Сходство с конкретными файлами
+        "overall_uniqueness": f"{overall_uniqueness:.2f}%",  # Новый расчет с учетом объема
+        "file_similarity": file_similarity,  # Проценты заимствований по файлам (по объему)
         "water_score": water_score,  # Показатель водянистости
         "spam_score": spam_score,  # Показатель спамности
-        "matched_sentences": matched_sentences,  # Индексы совпадений для подсветки
-        "ai_text_detected" : ai_text_detected,  # Процент предложений написанных ИИ
-        "spelling_errors": spelling_errors #Проверка орфографии
+        "matched_sentences": matched_sentences,  # Заимствованные предложения для подсветки
+        "ai_text_detected": ai_text_detected,  # Процент предложений написанных ИИ
+        "spelling_errors": spelling_errors,  # Проверка орфографии
+        "text_statistics": text_stats,  # Дополнительная статистика для анализа
+        "avg_file_similarity": avg_file_similarity  # Средние проценты сходства (для совместимости)
     }
