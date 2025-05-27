@@ -9,25 +9,50 @@ from sentence_transformers import SentenceTransformer
 import spacy
 from transformers import AutoTokenizer
 import numpy as np
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
-# Инициализация моделей
-model = SentenceTransformer('paraphrase-xlm-r-multilingual-v1')
-tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/paraphrase-xlm-r-multilingual-v1')
+# Глобальные переменные для моделей (загружаются по требованию)
+_model = None
+_nlp_ru = None
+_tokenizer = None
 
-# Инициализация spaCy для разбивки на предложения
-nlp_ru = spacy.load("ru_core_news_lg")
+# Константы (добавьте ваши значения)
+MAX_TOKENS = 512  # Пример значения, замените на нужное
+BASE_FOLDER = "output"  # Папка для сохранения результатов
+DATA_FOLDER = "data"  # Папка с исходными файлами
 
-# Константы
-MAX_TOKENS = 512  # Максимальное количество токенов для модели
-DATA_FOLDER = 'uploads'
-BASE_FOLDER = '../base'
-os.makedirs(BASE_FOLDER, exist_ok=True)
+
+def get_model():
+    """Получить модель SentenceTransformer (загружается при первом вызове)"""
+    global _model
+    if _model is None:
+        from sentence_transformers import SentenceTransformer
+        _model = SentenceTransformer('paraphrase-xlm-r-multilingual-v1')
+    return _model
+
+
+def get_nlp():
+    """Получить spaCy модель (загружается при первом вызове)"""
+    global _nlp_ru
+    if _nlp_ru is None:
+        import spacy
+        _nlp_ru = spacy.load("ru_core_news_lg")
+    return _nlp_ru
+
+
+def get_tokenizer():
+    """Получить токенайзер (загружается при первом вызове)"""
+    global _tokenizer
+    if _tokenizer is None:
+        from transformers import AutoTokenizer
+        _tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/paraphrase-xlm-r-multilingual-v1')
+    return _tokenizer
 
 
 def split_text_into_chunks(text: str, language: str) -> List[str]:
-    """Разбивает текст на части, не превышающие MAX_TOKENS токенов."""
-    nlp = nlp_ru
+    """Разбивает текст на чанки с учетом максимального количества токенов."""
+    nlp = get_nlp()
+    tokenizer = get_tokenizer()
     doc = nlp(text)
     chunks = []
     current_chunk = []
@@ -81,6 +106,9 @@ def split_text_into_chunks(text: str, language: str) -> List[str]:
 
 def preprocess_text_to_embeddings(text: str, language: str) -> List[np.ndarray]:
     """Обрабатывает текст любого размера, разбивая на части при необходимости."""
+    model = get_model()
+    nlp_ru = get_nlp()
+
     chunks = split_text_into_chunks(text, language)
     all_embeddings = []
 
@@ -95,6 +123,7 @@ def preprocess_text_to_embeddings(text: str, language: str) -> List[np.ndarray]:
 
 def save_embeddings_to_file(embeddings: List[np.ndarray], file_path: str):
     """Сохраняет эмбеддинги в файл с информацией о количестве частей."""
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, 'w', encoding='utf-8') as f:
         for embedding in embeddings:
             f.write(' '.join(map(str, embedding)) + '\n')
