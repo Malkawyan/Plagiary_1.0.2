@@ -3,10 +3,6 @@ import re
 import numpy as np
 from .model_loader import model_loader
 
-# Загружаем предобученную модель из singleton
-model = model_loader.model
-nlp = model_loader.nlp
-
 # Эталонные примеры для сравнения
 spam_examples = [
     "Купи сейчас! Супер скидки! Бесплатно! Волшебный метод! Успей!",
@@ -34,24 +30,54 @@ normal_embeddings = None
 watery_embeddings = None
 
 
+def _get_sentence_transformer_model():
+    """Получает модель SentenceTransformer с проверкой загрузки"""
+    model = model_loader.model
+    if model is None:
+        model_loader.logger.error("SentenceTransformer модель не загружена")
+        raise RuntimeError("SentenceTransformer модель недоступна")
+    return model
+
+
 def _get_spam_embeddings():
+    """Получает эмбеддинги спам-примеров с кэшированием"""
     global spam_embeddings
     if spam_embeddings is None:
-        spam_embeddings = model.encode(spam_examples, convert_to_tensor=True)
+        try:
+            model = _get_sentence_transformer_model()
+            spam_embeddings = model.encode(spam_examples, convert_to_tensor=True)
+            model_loader.logger.info("Спам-эмбеддинги закэшированы")
+        except Exception as e:
+            model_loader.logger.error(f"Ошибка при создании спам-эмбеддингов: {e}")
+            raise
     return spam_embeddings
 
 
 def _get_normal_embeddings():
+    """Получает эмбеддинги нормальных примеров с кэшированием"""
     global normal_embeddings
     if normal_embeddings is None:
-        normal_embeddings = model.encode(normal_examples, convert_to_tensor=True)
+        try:
+            model = _get_sentence_transformer_model()
+            normal_embeddings = model.encode(normal_examples, convert_to_tensor=True)
+            model_loader.logger.info("Нормальные эмбеддинги закэшированы")
+        except Exception as e:
+            model_loader.logger.error(f"Ошибка при создании нормальных эмбеддингов: {e}")
+            raise
     return normal_embeddings
 
 
 def _get_watery_embeddings():
+    """Получает эмбеддинги водянистых примеров с кэшированием"""
     global watery_embeddings
     if watery_embeddings is None:
-        watery_embeddings = model.encode(watery_examples, convert_to_tensor=True)
+        try:
+            model = _get_sentence_transformer_model()
+            watery_embeddings = model.encode(watery_examples, convert_to_tensor=True)
+            model_loader.logger.info("Водянистые эмбеддинги закэшированы")
+        except Exception as e:
+            model_loader.logger.error(f"Ошибка при создании водянистых эмбеддингов: {e}")
+            raise
     return watery_embeddings
 
 
@@ -121,8 +147,10 @@ def calculate_spamminess(text):
     :return: Процент спамности (0-100%)
     """
     try:
+        model = _get_sentence_transformer_model()
+
         # Семантический анализ с моделью
-        text_embedding = model.encode(text, convert_to_tensor=True)
+        text_embedding = model.encode(text, convert_to_tensor=True, device=model_loader.device)
         spam_embeddings = _get_spam_embeddings()
 
         # Рассчитываем среднее сходство с примерами спама
@@ -141,10 +169,13 @@ def calculate_spamminess(text):
         # Комбинируем оценки (70% семантический анализ, 30% маркеры)
         combined_score = semantic_score * 0.7 + marker_score * 0.3
 
+        # Очищаем кэш GPU после использования
+        model_loader.clear_cache()
+
         return round(combined_score, 2)
 
     except Exception as e:
-        print(f"Ошибка при расчете спамности: {e}")
+        model_loader.logger.error(f"Ошибка при расчете спамности: {e}")
         return 0
 
 
@@ -163,8 +194,10 @@ def calculate_wateriness(text):
         if len(text) < 100:
             return 0
 
+        model = _get_sentence_transformer_model()
+
         # Семантический анализ с моделью
-        text_embedding = model.encode(text, convert_to_tensor=True)
+        text_embedding = model.encode(text, convert_to_tensor=True, device=model_loader.device)
         watery_embeddings = _get_watery_embeddings()
         normal_embeddings = _get_normal_embeddings()
 
@@ -194,8 +227,44 @@ def calculate_wateriness(text):
                 filler_score * 0.25
         )
 
+        # Очищаем кэш GPU после использования
+        model_loader.clear_cache()
+
         return round(combined_score, 2)
 
     except Exception as e:
-        print(f"Ошибка при расчете водянистости: {e}")
+        model_loader.logger.error(f"Ошибка при расчете водянистости: {e}")
         return 0
+
+
+def get_seo_diagnostics():
+    """Возвращает диагностическую информацию для модуля SEO"""
+    try:
+        model = model_loader.model
+        device_info = model_loader.get_memory_info()
+
+        return {
+            "sentence_transformer_loaded": model is not None,
+            "device_info": device_info,
+            "embeddings_cached": {
+                "spam": spam_embeddings is not None,
+                "normal": normal_embeddings is not None,
+                "watery": watery_embeddings is not None
+            },
+            "model_device": str(next(model.parameters()).device) if model is not None else "N/A"
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "sentence_transformer_loaded": False
+        }
+
+
+def clear_embeddings_cache():
+    """Очищает кэш эмбеддингов для освобождения памяти"""
+    global spam_embeddings, normal_embeddings, watery_embeddings
+    spam_embeddings = None
+    normal_embeddings = None
+    watery_embeddings = None
+    model_loader.clear_cache()
+    model_loader.logger.info("Кэш эмбеддингов очищен")

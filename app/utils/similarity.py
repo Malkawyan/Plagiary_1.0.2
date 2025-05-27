@@ -1,8 +1,33 @@
 import numpy as np
 import logging
 import torch
+import gc
 
 logging.basicConfig(level=logging.DEBUG)
+
+
+def _get_device():
+    """Определяет оптимальное устройство для вычислений"""
+    # Проверяем NVIDIA CUDA
+    if torch.cuda.is_available():
+        try:
+            test_tensor = torch.tensor([1.0]).cuda()
+            _ = test_tensor * 2
+            return torch.device("cuda")
+        except Exception:
+            pass
+
+    # Проверяем AMD ROCm
+    try:
+        import os
+        if os.environ.get('ROCM_PATH') or os.environ.get('HIP_PATH'):
+            test_tensor = torch.tensor([1.0], device='cuda:0')
+            _ = test_tensor * 2
+            return torch.device("cuda:0")
+    except Exception:
+        pass
+
+    return torch.device("cpu")
 
 
 def calculate_similarity_matrix(uploaded_embeddings, base_embeddings, batch_size=100):
@@ -13,7 +38,9 @@ def calculate_similarity_matrix(uploaded_embeddings, base_embeddings, batch_size
     :param batch_size: размер обрабатываемого пакета для экономии памяти
     :return: матрица сходств в виде numpy массива и список файлов, соответствующих каждому эмбеддингу.
     """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = _get_device()
+    logger = logging.getLogger(__name__)
+    logger.info(f"Используется устройство: {device}")
 
     if not uploaded_embeddings or not base_embeddings:
         return np.array([]), []
@@ -32,36 +59,86 @@ def calculate_similarity_matrix(uploaded_embeddings, base_embeddings, batch_size
     if uploaded_embeddings.size == 0 or base_embeddings_array.size == 0:
         return np.array([]), []
 
-    all_base = torch.tensor(base_embeddings_array, device=device)
+    try:
+        # Используем float16 для GPU, float32 для CPU
+        dtype = torch.float16 if device.type == 'cuda' else torch.float32
 
-    if len(uploaded_embeddings.shape) == 1:
-        uploaded_embeddings = uploaded_embeddings.reshape(1, -1)
+        all_base = torch.tensor(base_embeddings_array, device=device, dtype=dtype)
 
-    if len(all_base.shape) == 1:
-        all_base = all_base.unsqueeze(0)
+        if len(uploaded_embeddings.shape) == 1:
+            uploaded_embeddings = uploaded_embeddings.reshape(1, -1)
 
-    norm_all_base = torch.norm(all_base, dim=1)
-    norm_all_base = torch.clamp(norm_all_base, min=1e-8)
+        if len(all_base.shape) == 1:
+            all_base = all_base.unsqueeze(0)
 
-    num_uploaded = len(uploaded_embeddings)
-    num_base = len(base_embeddings_list)
-    similarity_matrix = np.zeros((num_uploaded, num_base), dtype=np.float32)
+        norm_all_base = torch.norm(all_base, dim=1)
+        norm_all_base = torch.clamp(norm_all_base, min=1e-8)
 
-    for i in range(0, num_uploaded, batch_size):
-        batch_end = min(i + batch_size, num_uploaded)
-        batch = uploaded_embeddings[i:batch_end]
+        num_uploaded = len(uploaded_embeddings)
+        num_base = len(base_embeddings_list)
+        similarity_matrix = np.zeros((num_uploaded, num_base), dtype=np.float32)
 
-        batch_tensor = torch.tensor(batch, device=device)
+        for i in range(0, num_uploaded, batch_size):
+            batch_end = min(i + batch_size, num_uploaded)
+            batch = uploaded_embeddings[i:batch_end]
 
-        norm_batch = torch.norm(batch_tensor, dim=1, keepdim=True)
-        norm_batch = torch.clamp(norm_batch, min=1e-8)
+            try:
+                batch_tensor = torch.tensor(batch, device=device, dtype=dtype)
 
-        batch_similarity = torch.mm(batch_tensor, all_base.mT) / (norm_batch * norm_all_base)
+                norm_batch = torch.norm(batch_tensor, dim=1, keepdim=True)
+                norm_batch = torch.clamp(norm_batch, min=1e-8)
 
-        similarity_matrix[i:batch_end] = batch_similarity.cpu().numpy()
+                with torch.no_grad():
+                    batch_similarity = torch.mm(batch_tensor, all_base.mT) / (norm_batch * norm_all_base)
 
+                similarity_matrix[i:batch_end] = batch_similarity.float().cpu().numpy()
+
+                # Очистка памяти
+                del batch_tensor, norm_batch, batch_similarity
+
+                if device.type == 'cuda':
+                    torch.cuda.empty_cache()
+
+            except RuntimeError as e:
+                if "out of memory" in str(e):
+                    logger.warning("Недостаточно GPU памяти, переходим на CPU")
+                    if device.type == 'cuda':
+                        torch.cuda.empty_cache()
+                    # Пересчитываем на CPU
+                    return _calculate_on_cpu(uploaded_embeddings, base_embeddings_array, base_files)
+                else:
+                    raise e
+
+        # Финальная очистка
+        del all_base, norm_all_base
         if device.type == 'cuda':
             torch.cuda.empty_cache()
+        gc.collect()
+
+        return similarity_matrix, base_files
+
+    except Exception as e:
+        logger.error(f"Ошибка GPU вычислений: {e}")
+        logger.info("Переходим на CPU")
+        return _calculate_on_cpu(uploaded_embeddings, base_embeddings_array, base_files)
+
+
+def _calculate_on_cpu(uploaded_embeddings, base_embeddings_array, base_files):
+    """Простая CPU версия для fallback"""
+    logger = logging.getLogger(__name__)
+    logger.info("Используется CPU для вычислений")
+
+    # Нормализация
+    uploaded_norms = np.linalg.norm(uploaded_embeddings, axis=1, keepdims=True)
+    uploaded_norms = np.clip(uploaded_norms, a_min=1e-8, a_max=None)
+    uploaded_normalized = uploaded_embeddings / uploaded_norms
+
+    base_norms = np.linalg.norm(base_embeddings_array, axis=1, keepdims=True)
+    base_norms = np.clip(base_norms, a_min=1e-8, a_max=None)
+    base_normalized = base_embeddings_array / base_norms
+
+    # Косинусное сходство
+    similarity_matrix = np.dot(uploaded_normalized, base_normalized.T)
 
     return similarity_matrix, base_files
 
