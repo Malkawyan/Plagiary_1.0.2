@@ -1,127 +1,111 @@
 from language_tool_python import LanguageTool
 from typing import List, Dict, Union
-import re
 import logging
-import json
-import os
+import time
 
-# Настройка логгирования
 logging.basicConfig(level=logging.INFO)
-# Уменьшаем вывод от urllib3
 logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
 
 def init_spell_checker(language='ru-RU'):
-    """Инициализация LanguageTool для проверки орфографии"""
-    tool = LanguageTool(language)
+    """Инициализируем LanguageTool с увеличенным лимитом"""
+    try:
+        tool = LanguageTool(language, config={'maxTextLength': 50000})
+    except:
+        tool = LanguageTool(language)
 
-    # Включаем больше правил, связанных с орфографией
-    # Отключаем только те категории, которые однозначно не связаны с орфографией
-    disabled_rule_categories = [
-        'PUNCTUATION', 'TYPOGRAPHY', 'CASING'
-    ]
-
-    # Пытаемся отключить неорфографические правила
-    for rule in disabled_rule_categories:
+    # Отключаем лишние правила
+    for rule in ['PUNCTUATION', 'TYPOGRAPHY', 'CASING']:
         try:
             tool.disable(rule)
         except:
-            logging.warning(f"Не удалось отключить правило {rule}")
-
+            pass
     return tool
 
 
+def split_text(text: str, chunk_size: int = 8000) -> List[Dict]:
+    """Режем текст на куски"""
+    if len(text) <= chunk_size:
+        return [{'text': text, 'offset': 0}]
+
+    chunks = []
+    start = 0
+
+    while start < len(text):
+        end = min(start + chunk_size, len(text))
+
+        # Ищем конец предложения
+        if end < len(text):
+            for punct in ['.', '!', '?']:
+                pos = text.rfind(punct, start, end)
+                if pos > start + chunk_size // 2:
+                    end = pos + 1
+                    break
+
+        chunks.append({'text': text[start:end], 'offset': start})
+        start = end
+
+    return chunks
+
+
 def check_spelling_errors(text: str, tool: LanguageTool) -> List[Dict[str, Union[str, int]]]:
-    """
-    Проверка текста на наличие орфографических ошибок с помощью LanguageTool
+    """Проверяем орфографию с поддержкой больших файлов"""
+    chunks = split_text(text)
+    all_errors = []
 
-    Args:
-        text: Текст для проверки
-        tool: Инициализированный экземпляр LanguageTool
+    for i, chunk in enumerate(chunks):
+        print(f"Обрабатываю кусок {i + 1}/{len(chunks)}")
 
-    Returns:
-        Список словарей с информацией об ошибках
-    """
-    spelling_errors = []
+        # Повторяем до 3 раз при сетевых ошибках
+        for attempt in range(3):
+            try:
+                matches = tool.check(chunk['text'])
+                break
+            except Exception as e:
+                if "Connection aborted" in str(e) and attempt < 2:
+                    time.sleep(1)
+                    continue
+                matches = []
+                break
 
-    # Проверяем текст с помощью LanguageTool
-    try:
-        matches = tool.check(text)
-        if not matches:
-            logging.info("LanguageTool не нашел ошибок или предупреждений")
-    except Exception as e:
-        logging.error(f"Ошибка при проверке текста: {e}")
-        return []
+        # Обрабатываем найденные ошибки
+        for match in matches:
+            rule_id = match.ruleId
+            if any(x in rule_id.upper() for x in ['SPELL', 'TYPO', 'MORFOLOGIK', 'GRAMMAR']):
+                error_offset = chunk['offset'] + match.offset
+                error_text = text[error_offset:error_offset + match.errorLength]
 
-    # Обрабатываем найденные ошибки
-    for match in matches:
-        rule_id = match.ruleId
-        error_text = text[match.offset:match.offset + match.errorLength]
+                # Пропускаем короткие слова
+                if len(error_text.strip()) > 2:
+                    all_errors.append({
+                        'word': error_text,
+                        'offset': error_offset,
+                        'length': match.errorLength,
+                        'message': getattr(match, 'message', "Орфографическая ошибка"),
+                        'replacements': getattr(match, 'replacements', [])
+                    })
 
-        # Лог для отладки - показывает все найденные правила
-        logging.debug(f"Найдено правило: {rule_id} для текста: {error_text}")
+        time.sleep(0.1)  # Не перегружаем сервер
 
-        # Расширяем критерии включения для охвата большего числа ошибок
-        # Проверяем, связана ли ошибка с орфографией или грамматикой
-        if ('SPELL' in rule_id.upper() or 'TYPO' in rule_id.upper() or
-                'MORFOLOGIK' in rule_id.upper() or 'GRAMMAR' in rule_id.upper()):
-            error_data = {
-                'word': error_text,
-                'offset': match.offset,
-                'length': match.errorLength,
-                'message': getattr(match, 'message', "Возможная орфографическая ошибка"),
-                'replacements': getattr(match, 'replacements', [])
-            }
-            spelling_errors.append(error_data)
-
-    # Доп. проверка на короткие слова и аббревиатуры
-    final_errors = []
-    for error in spelling_errors:
-        word = error['word'].lower()
-
-        # Пропускаем очень короткие слова (вероятно, аббревиатуры)
-        if len(word) <= 2:
-            continue
-
-        # Добавляем только слова с высокой вероятностью ошибки
-        final_errors.append(error)
-
-    # Сортируем ошибки по их позиции в тексте
-    final_errors.sort(key=lambda x: x['offset'])
-
-    return final_errors
+    # Убираем дубликаты и сортируем
+    unique_errors = list({(e['offset'], e['word']): e for e in all_errors}.values())
+    return sorted(unique_errors, key=lambda x: x['offset'])
 
 
 def highlight_spelling_errors_in_html(text: str, errors: List[Dict]) -> str:
-    """
-    Добавляет HTML-разметку для выделения слов с орфографическими ошибками
-
-    Args:
-        text: Исходный текст
-        errors: Список словарей с ошибками
-
-    Returns:
-        HTML-текст с выделенными ошибками
-    """
+    """Оборачиваем ошибки в HTML"""
     if not errors:
         return text
 
-    # Работаем с копией текста
     result = text
-
-    # Сортируем ошибки в обратном порядке, чтобы избежать смещения индексов
     for error in sorted(errors, key=lambda x: x['offset'], reverse=True):
         start = error['offset']
         end = start + error['length']
-        error_word = result[start:end]
+        word = result[start:end]
 
-        # Форматируем предложения замены
-        replacements = ", ".join(error["replacements"][:3]) if error["replacements"] else "нет предложений"
+        replacements = ", ".join(error["replacements"][:3]) if error["replacements"] else "нет вариантов"
+        highlight = f'<span style="background-color: #ffcccc;" title="{error["message"]}. Варианты: {replacements}">{word}</span>'
 
-        # Создаем HTML-разметку для выделения
-        highlight = f'<span class="spelling-error" style="background-color: #ffcccc;" title="Ошибка: {error["message"]}. Предложения: {replacements}">{error_word}</span>'
-
-        # Заменяем в тексте
         result = result[:start] + highlight + result[end:]
 
     return result
