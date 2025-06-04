@@ -3,7 +3,7 @@ import logging
 from langdetect import detect
 from app.services.text_processing import process_text
 from app.config import Config
-from app.services.file_storage import get_unique_filename
+from app.services.file_storage import check_file_exists
 from app.services.file_processing import read_file
 import os
 
@@ -48,7 +48,7 @@ def process_text_route():
 
         # Только если текста нет — читаем файл
         if uploaded_file:
-            unique_filename = get_unique_filename(Config.UPLOAD_FOLDER, uploaded_file.filename)
+            unique_filename = check_file_exists(Config.UPLOAD_FOLDER, uploaded_file.filename)
             file_path = os.path.join(Config.UPLOAD_FOLDER, unique_filename)
             uploaded_file.save(file_path)
             text = read_file(file_path)

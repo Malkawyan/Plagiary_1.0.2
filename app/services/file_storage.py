@@ -1,3 +1,4 @@
+
 import os
 from app.config import Config
 
@@ -16,21 +17,13 @@ def save_uploaded_file(uploaded_file):
     uploaded_file.save(file_path)
     return file_path
 
-def get_unique_filename(folder, filename):
+def check_file_exists(folder, filename):
     """
-    Генерирует уникальное имя файла, добавляя суффикс, если файл с таким именем уже существует.
+    Проверяет, существует ли файл с указанным именем в папке.
 
-    :param folder: Папка, в которой будет сохранен файл.
-    :param filename: Исходное имя файла.
-    :return: Уникальное имя файла.
+    :param folder: Папка, в которой проверяется наличие файла.
+    :param filename: Имя файла для проверки.
+    :return: True, если файл существует, False - если нет.
     """
-    base_name, extension = os.path.splitext(filename)  # Разделяем имя и расширение
-    counter = 1
-    unique_name = filename
-
-    # Проверяем, существует ли файл с таким именем
-    while os.path.exists(os.path.join(folder, unique_name)):
-        unique_name = f"{base_name}_{counter}{extension}"  # Добавляем суффикс
-        counter += 1
-
-    return unique_name
+    file_path = os.path.join(folder, filename)
+    return os.path.exists(file_path)

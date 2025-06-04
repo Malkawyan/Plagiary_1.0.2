@@ -173,7 +173,7 @@ def calculate_text_statistics(sentences):
     return stats
 
 
-def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, sentences, threshold=70,
+def calculate_uniqueness_and_similarity(uploaded_embeddings, base_embeddings, sentences, threshold=65,
                                         min_file_similarity=1.0):
     """
     Вычисляет общую уникальность текста и проценты заимствования для каждого файла.
