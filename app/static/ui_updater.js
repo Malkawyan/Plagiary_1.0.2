@@ -52,6 +52,29 @@ export class UIUpdater {
     }
 
     /**
+     * Отображает сообщение об отмене операции
+     */
+    displayCancelMessage() {
+        this.resultsDiv.innerHTML = '<p style="color: #f39c12; font-weight: bold;">Проверка была отменена пользователем.</p>';
+
+        // Очищаем результаты во всех панелях
+        this.uniResultsDiv.innerHTML = 'Результаты проверки уникальности будут отображены здесь.';
+        this.seoResultsDiv.innerHTML = 'Результаты SEO анализа будут отображены здесь.';
+        this.aiResultsDiv.innerHTML = 'Результаты проверки на написание текста ИИ будут здесь.';
+
+        const spellResultsDiv = document.getElementById('spell-results');
+        if (spellResultsDiv) {
+            spellResultsDiv.innerHTML = 'Проверяет текст на наличие орфографических ошибок.';
+        }
+
+        // Очищаем данные
+        this.data = null;
+
+        // Обновляем отображение текста (убираем подсветку)
+        this.updateTextDisplay();
+    }
+
+    /**
      * Переключает режим отображения
      * @param {string} viewType - Режим отображения ('all', 'uniqueness', 'spelling', 'ai', 'seo')
      */

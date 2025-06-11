@@ -11,7 +11,7 @@ export class ApiService {
      */
     constructor(uiUpdater) {
         this.uiUpdater = uiUpdater;
-        this.cancelRequested = false;
+        this.abortController = null; // Контроллер для отмены запросов
     }
 
     /**
@@ -21,7 +21,14 @@ export class ApiService {
      * @returns {Promise<void>}
      */
     async checkForPlagiarism(text, file = null) {
-        this.cancelRequested = false;
+        // Отменяем предыдущий запрос, если он выполняется
+        if (this.abortController) {
+            this.abortController.abort();
+        }
+
+        // Создаем новый контроллер для текущего запроса
+        this.abortController = new AbortController();
+
         this.uiUpdater.updateLoadingState(true);
 
         const formData = new FormData();
@@ -31,21 +38,27 @@ export class ApiService {
         try {
             const response = await fetch('/', {
                 method: 'POST',
-                body: formData
+                body: formData,
+                signal: this.abortController.signal // Передаем сигнал для отмены
             });
 
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
             const data = await response.json();
-            if (!this.cancelRequested) {
-                this.uiUpdater.displayResults(data);
-            }
+            this.uiUpdater.displayResults(data);
+
         } catch (error) {
-            if (!this.cancelRequested) {
+            // Проверяем, была ли операция отменена
+            if (error.name === 'AbortError') {
+                console.log('Запрос был отменен пользователем');
+                this.uiUpdater.displayCancelMessage();
+            } else {
+                console.error('Ошибка при выполнении запроса:', error);
                 this.uiUpdater.displayError(error);
             }
         } finally {
             this.uiUpdater.updateLoadingState(false);
+            this.abortController = null; // Очищаем контроллер
         }
     }
 
@@ -53,6 +66,9 @@ export class ApiService {
      * Отменяет текущий запрос
      */
     cancelRequest() {
-        this.cancelRequested = true;
+        if (this.abortController) {
+            this.abortController.abort();
+            console.log('Запрос отменен');
+        }
     }
 }

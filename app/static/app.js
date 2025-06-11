@@ -19,6 +19,7 @@ export class AntiPlagiarismApp {
         this.seoResultsDiv = document.getElementById('seo-results');
         this.aiResultsDiv = document.getElementById('ai-results');
         this.spellResultsDiv = document.getElementById('spell-results');
+        this.loadingElement = document.getElementById('loading');
 
         if (!this.aiResultsDiv) console.error('Элемент #ai-results не найден!');
 
@@ -36,8 +37,33 @@ export class AntiPlagiarismApp {
         );
         this.apiService = new ApiService(this.uiUpdater);
 
+        // Флаг для отслеживания состояния загрузки
+        this.isProcessing = false;
+
         // Настройка обработчиков событий
         this.setupEventListeners();
+
+        // Инициализация состояния кнопок
+        this.updateButtonStates();
+    }
+
+    /**
+     * Обновляет состояние кнопок в зависимости от текущего состояния приложения
+     */
+    updateButtonStates() {
+        const hasContent = this.contentDiv.textContent.trim() || this.fileInput.files.length > 0;
+
+        if (this.isProcessing) {
+            this.startButton.disabled = true;
+            this.startButton.textContent = 'Проверяется...';
+            this.cancelButton.disabled = false;
+            this.cancelButton.style.display = 'inline-block';
+        } else {
+            this.startButton.disabled = !hasContent;
+            this.startButton.textContent = 'Проверить';
+            this.cancelButton.disabled = true;
+            this.cancelButton.style.display = 'none';
+        }
     }
 
     /**
@@ -54,39 +80,70 @@ export class AntiPlagiarismApp {
                     this.contentDiv.innerHTML = '';
 
                     await this.fileHandler.handleFileUpload(file);
-                    this.startButton.disabled = false;
 
                     // После загрузки файла сохраняем текст в data-атрибут для безопасного доступа
                     this.contentDiv.dataset.originalText = this.contentDiv.textContent;
+
+                    // Обновляем состояние кнопок
+                    this.updateButtonStates();
                 } catch (error) {
                     console.error('File processing error:', error);
                     this.statusDiv.textContent = 'Ошибка при обработке файла';
                 }
+            } else {
+                this.updateButtonStates();
             }
         });
 
         // Обработчик ввода текста
         this.contentDiv.addEventListener('input', () => {
-            this.startButton.disabled = false;
             // Обновляем оригинальный текст при ручном редактировании
             this.contentDiv.dataset.originalText = this.contentDiv.textContent;
+            // Обновляем состояние кнопок
+            this.updateButtonStates();
         });
 
         // Обработчик кнопки проверки
-        this.startButton.addEventListener('click', () => {
+        this.startButton.addEventListener('click', async () => {
             // Используем оригинальный текст из data-атрибута или текущий текст
             const text = this.contentDiv.dataset.originalText || this.contentDiv.textContent;
-            const file = this.fileInput.files[0];
-            this.apiService.checkForPlagiarism(text, file);
+
+            if (!text.trim()) {
+                alert('Пожалуйста, введите или загрузите текст для проверки');
+                return;
+            }
+
+            this.isProcessing = true;
+            this.updateButtonStates();
+
+            try {
+                const file = this.fileInput.files[0];
+                await this.apiService.checkForPlagiarism(text, file);
+            } catch (error) {
+                console.error('Error during plagiarism check:', error);
+            } finally {
+                this.isProcessing = false;
+                this.updateButtonStates();
+            }
         });
 
         // Обработчик кнопки отмены
         this.cancelButton.addEventListener('click', () => {
             this.apiService.cancelRequest();
+            this.isProcessing = false;
+            this.updateButtonStates();
         });
 
         // Обработчики для колонок с типами анализа
         this.setupInfoColumnClickHandlers();
+
+        // Добавляем обработчик для отслеживания состояния загрузки
+        const originalUpdateLoadingState = this.uiUpdater.updateLoadingState.bind(this.uiUpdater);
+        this.uiUpdater.updateLoadingState = (isLoading) => {
+            originalUpdateLoadingState(isLoading);
+            this.isProcessing = isLoading;
+            this.updateButtonStates();
+        };
     }
 
     /**

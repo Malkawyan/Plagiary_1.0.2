@@ -22,70 +22,56 @@ export class TextProcessor {
     }
 
     /**
-     * Выделяет неуникальные предложения в тексте с улучшенным алгоритмом
+     * Выделяет неуникальные предложения в тексте
      * @static
-     * @param {string} fullText - Полный текст для анализа
-     * @param {string[]} matchedSentences - Массив неуникальных предложений
+     * @param {string} fullText - Полный текст для анализа (уже экранированный)
+     * @param {string[]} matchedSentences - Массив неуникальных предложений (неэкранированных)
      * @returns {string} - Текст с HTML-разметкой для выделения неуникальных фрагментов
      */
     static highlightNonUniqueText(fullText, matchedSentences) {
         if (!fullText || !matchedSentences || matchedSentences.length === 0) {
-            return fullText; // Возвращаем уже экранированный текст
+            return fullText;
         }
 
-        // Текст уже должен быть экранирован на этом этапе
         let processedText = fullText;
-
-        // Создаем структуру для отслеживания позиций в тексте
         const positions = [];
 
-        // Обрабатываем все неуникальные предложения
+        // Обрабатываем каждое неуникальное предложение
         matchedSentences.forEach(sentence => {
-            // Игнорируем пустые или слишком короткие предложения
-            if (!sentence || sentence.length < 3) return;
+            if (!sentence || sentence.trim().length < 3) return;
 
-            const escapedSentence = this.escapeHtml(sentence);
+            const trimmedSentence = sentence.trim();
+            const escapedSentence = this.escapeHtml(trimmedSentence);
+
+            // Ищем точные совпадения
             let startPos = 0;
-
-            // Находим все вхождения предложения в тексте
             while (true) {
                 const pos = processedText.indexOf(escapedSentence, startPos);
                 if (pos === -1) break;
 
-                positions.push({
-                    start: pos,
-                    end: pos + escapedSentence.length,
-                    text: escapedSentence
-                });
+                // Проверяем границы слов для более точного совпадения
+                const isValidMatch = this.isWordBoundary(processedText, pos, pos + escapedSentence.length);
 
-                startPos = pos + 1; // Ищем следующее вхождение
+                if (isValidMatch) {
+                    positions.push({
+                        start: pos,
+                        end: pos + escapedSentence.length,
+                        text: escapedSentence
+                    });
+                }
+
+                startPos = pos + 1;
             }
         });
 
-        // Сортируем позиции от конца к началу текста для правильной вставки HTML-тегов
-        positions.sort((a, b) => b.start - a.start);
+        // Удаляем перекрывающиеся позиции
+        const cleanPositions = this.removeOverlaps(positions);
 
-        // Устраняем перекрытия
-        const nonOverlappingPositions = [];
-        for (let i = 0; i < positions.length; i++) {
-            let overlaps = false;
+        // Сортируем от конца к началу для правильной вставки тегов
+        cleanPositions.sort((a, b) => b.start - a.start);
 
-            for (let j = 0; j < nonOverlappingPositions.length; j++) {
-                // Проверяем на перекрытие
-                if (positions[i].start < nonOverlappingPositions[j].end &&
-                    positions[i].end > nonOverlappingPositions[j].start) {
-                    overlaps = true;
-                    break;
-                }
-            }
-
-            if (!overlaps) {
-                nonOverlappingPositions.push(positions[i]);
-            }
-        }
-
-        // Вставляем HTML-теги для выделения
-        nonOverlappingPositions.forEach(pos => {
+        // Вставляем HTML-теги
+        cleanPositions.forEach(pos => {
             processedText =
                 processedText.substring(0, pos.start) +
                 '<span class="non-unique" style="background-color: yellow; color: black;">' +
@@ -95,6 +81,57 @@ export class TextProcessor {
         });
 
         return processedText;
+    }
+
+    /**
+     * Проверяет, находится ли найденный текст на границах слов
+     * @static
+     * @param {string} text - Полный текст
+     * @param {number} start - Начальная позиция
+     * @param {number} end - Конечная позиция
+     * @returns {boolean} - true, если это валидная граница слов
+     */
+    static isWordBoundary(text, start, end) {
+        // Проверяем символы до и после найденного фрагмента
+        const charBefore = start > 0 ? text[start - 1] : ' ';
+        const charAfter = end < text.length ? text[end] : ' ';
+
+        // Определяем, является ли символ разделителем
+        const isDelimiter = (char) => /[\s\n\r\t.,;:!?()[\]{}"|«»„"'`]/.test(char);
+
+        return isDelimiter(charBefore) && isDelimiter(charAfter);
+    }
+
+    /**
+     * Удаляет перекрывающиеся позиции, оставляя более длинные
+     * @static
+     * @param {Array} positions - Массив позиций
+     * @returns {Array} - Массив без перекрытий
+     */
+    static removeOverlaps(positions) {
+        if (positions.length <= 1) return positions;
+
+        // Сортируем по длине (от длинных к коротким)
+        positions.sort((a, b) => (b.end - b.start) - (a.end - a.start));
+
+        const result = [];
+
+        for (const pos of positions) {
+            let hasOverlap = false;
+
+            for (const existing of result) {
+                if (pos.start < existing.end && pos.end > existing.start) {
+                    hasOverlap = true;
+                    break;
+                }
+            }
+
+            if (!hasOverlap) {
+                result.push(pos);
+            }
+        }
+
+        return result;
     }
 
     /**
