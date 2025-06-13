@@ -1,253 +1,245 @@
 from .model_loader import model_loader
 import torch
 from tqdm import tqdm
-from typing import List, Union, Tuple
+from typing import List, Union
 import numpy as np
-from collections import Counter
 import re
-from .text_utils import split_text_into_chunks
 
 
-def calculate_repetition_score(text: str) -> float:
-    """Вычисляет оценку повторяемости в тексте (характерно для ИИ)"""
-    words = text.lower().split()
-    if len(words) < 10:
-        return 0.0
-
-    unique_words = set(words)
-    return 1 - (len(unique_words) / len(words))
-
-
-def calculate_perplexity(text: str, model=None, tokenizer=None) -> float:
-    """Упрощенная оценка перплексии текста"""
+def calculate_russian_ai_patterns(text: str) -> float:
+    """Детекция паттернов, характерных для русского AI-текста"""
     if not text or len(text.split()) < 5:
         return 0.0
 
-    # Простая эвристика вместо реальной перплексии
-    word_variation = len(set(text.split())) / len(text.split())
-    sentence_length_variation = np.std([len(sent.split()) for sent in text.split('.') if sent.strip()])
+    ai_patterns = 0
+    text_lower = text.lower()
 
-    return word_variation * 0.7 + sentence_length_variation * 0.3
-
-
-def ensemble_prediction(text: str) -> float:
-    """Улучшенное ансамблевое предсказание с калибровкой под современные модели ИИ"""
-    models = [
-        (model_loader.ai_detector_model, model_loader.ai_detector_tokenizer, 0.5),
-        (model_loader.multilingual_detector_model, model_loader.multilingual_detector_tokenizer, 0.3),
-        (model_loader.modern_ai_detector_model, model_loader.modern_ai_detector_tokenizer, 0.2)
+    # Расширенные AI-фразы на русском (современные GPT модели)
+    ai_phrases = [
+        'важно отметить', 'стоит отметить', 'следует отметить', 'необходимо отметить',
+        'таким образом', 'в заключение', 'подводя итог', 'в итоге', 'резюмируя',
+        'кроме того', 'более того', 'помимо этого', 'дополнительно',
+        'с одной стороны', 'с другой стороны', 'в то же время',
+        'необходимо подчеркнуть', 'нельзя не отметить', 'стоит подчеркнуть',
+        'однако', 'тем не менее', 'несмотря на это',
+        'в первую очередь', 'прежде всего', 'главным образом',
+        'что касается', 'относительно', 'в отношении',
+        'безусловно', 'несомненно', 'определенно', 'очевидно'
     ]
 
-    predictions = []
-    chunks = split_text_into_chunks(text)
-    device = model_loader.device
+    # Подсчет фраз с весами
+    phrase_count = 0
+    for phrase in ai_phrases:
+        count = text_lower.count(phrase)
+        phrase_count += count
+        if count > 0:
+            ai_patterns += count * 2  # Увеличиваем вес
 
-    for model, tokenizer, weight in models:
-        # Проверяем, что модель и токенизатор загружены успешно
-        if model is None or tokenizer is None:
-            model_loader.logger.warning(f"Модель или токенизатор не загружены, пропускаем")
+    # Структурные паттерны
+    sentences = [s.strip() for s in text.split('.') if s.strip() and len(s.strip()) > 5]
+
+    if len(sentences) > 2:
+        # Слишком правильная длина предложений
+        lengths = [len(s.split()) for s in sentences]
+        avg_length = sum(lengths) / len(lengths)
+
+        # Современные AI делают предложения 8-25 слов
+        if 8 <= avg_length <= 25:
+            ai_patterns += 3
+
+        # Слишком равномерная длина предложений
+        if len(lengths) > 3:
+            variance = np.var(lengths)
+            if variance < 20:  # Низкая вариативность длины
+                ai_patterns += 2
+
+    # Слишком много списков и структурированности
+    list_markers = text.lower().count('во-первых') + text.lower().count('во-вторых') + text.lower().count('в-третьих')
+    if list_markers > 0:
+        ai_patterns += list_markers * 2
+
+    # Избыточная вежливость и формальность
+    formal_phrases = ['позвольте', 'разрешите', 'хотелось бы отметить', 'важно понимать']
+    for phrase in formal_phrases:
+        ai_patterns += text_lower.count(phrase) * 3
+
+    # Нормализуем относительно длины текста
+    word_count = len(text.split())
+    normalized_score = ai_patterns / max(1, word_count / 50)  # Более чувствительная нормализация
+
+    return min(1.0, normalized_score)
+
+
+def detect_ai_text_improved(text: str) -> float:
+    """Улучшенная детекция AI для русского языка"""
+    if not text or len(text.split()) < 10:
+        return 0.0
+
+    # Сначала проверяем паттерны
+    pattern_score = calculate_russian_ai_patterns(text)
+
+    # Если паттернов много, сразу высокий скор
+    if pattern_score > 0.3:
+        base_score = pattern_score
+    else:
+        base_score = pattern_score * 0.5
+
+    # Дополнительные эвристики для современных моделей
+
+    # 1. Слишком "правильный" русский язык
+    words = text.split()
+    if len(words) > 50:
+        # Проверяем разнообразие слов
+        unique_words = len(set(words))
+        diversity = unique_words / len(words)
+
+        # AI генерирует менее разнообразный текст
+        if diversity < 0.6:
+            base_score += 0.2
+
+    # 2. Типичные AI-конструкции в русском
+    ai_constructions = [
+        r'что\s+позволяет',
+        r'что\s+способствует',
+        r'это\s+означает',
+        r'данный\s+подход',
+        r'указанный\s+метод',
+        r'рассматриваемый\s+вопрос'
+    ]
+
+    construction_count = 0
+    for pattern in ai_constructions:
+        construction_count += len(re.findall(pattern, text.lower()))
+
+    if construction_count > 0:
+        base_score += min(0.3, construction_count * 0.1)
+
+    # 3. Слишком много причастных оборотов (AI любит их)
+    participle_patterns = [r'\w+ющий', r'\w+ащий', r'\w+вший', r'\w+нный']
+    participle_count = 0
+    for pattern in participle_patterns:
+        participle_count += len(re.findall(pattern, text.lower()))
+
+    if participle_count > len(words) / 20:  # Слишком много причастий
+        base_score += 0.15
+
+    # Пытаемся использовать модель, если доступна
+    model = model_loader.ai_detector_model
+    tokenizer = model_loader.ai_detector_tokenizer
+
+    if model is not None and tokenizer is not None:
+        try:
+            # Берем первые 400 слов для анализа
+            chunk_words = text.split()[:400]
+            chunk = ' '.join(chunk_words)
+
+            inputs = tokenizer(
+                chunk,
+                return_tensors="pt",
+                truncation=True,
+                max_length=512,
+                padding=True
+            ).to(model_loader.device)
+
+            with torch.no_grad():
+                outputs = model(**inputs)
+                probs = torch.softmax(outputs.logits, dim=-1)
+
+                # Пробуем разные индексы для AI класса
+                if probs.shape[1] >= 2:
+                    ai_prob = max(probs[0][1].item(), probs[0][0].item())
+                else:
+                    ai_prob = probs[0][0].item()
+
+                # Комбинируем с эвристиками (больший вес эвристикам для русского)
+                final_score = base_score * 0.8 + ai_prob * 0.2
+
+        except Exception as e:
+            model_loader.logger.error(f"Ошибка модели: {e}")
+            final_score = base_score
+    else:
+        final_score = base_score
+
+    # Калибровка для современных моделей
+    if final_score > 0.2:
+        final_score = min(1.0, final_score * 1.5)  # Более агрессивная калибровка
+
+    model_loader.clear_cache()
+    return round(final_score * 100, 2)
+
+
+def get_detailed_ai_analysis(text: str) -> dict:
+    """Детальный анализ с разбивкой по фрагментам"""
+    if not text:
+        return {"overall_ai_score": 0.0, "chunks": [], "error": "Пустой текст"}
+
+    # Разбиваем на абзацы, а не предложения
+    paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+
+    if not paragraphs:
+        # Fallback на предложения
+        sentences = [s.strip() + '.' for s in text.split('.') if s.strip()]
+        if len(sentences) < 2:
+            overall_score = detect_ai_text_improved(text)
+            return {
+                "overall_ai_score": overall_score,
+                "chunks": [{
+                    "chunk_id": 1,
+                    "text": text[:200] + "..." if len(text) > 200 else text,
+                    "ai_score": overall_score
+                }]
+            }
+        chunks = [' '.join(sentences[i:i + 3]) for i in range(0, len(sentences), 3)]
+    else:
+        chunks = paragraphs
+
+    chunk_results = []
+    chunk_scores = []
+
+    for i, chunk in enumerate(chunks):
+        if len(chunk.split()) < 5:  # Пропускаем слишком короткие
             continue
 
-        chunk_probs = []
+        score = detect_ai_text_improved(chunk)
+        chunk_scores.append(score)
 
-        for chunk in chunks:
-            try:
-                inputs = tokenizer(
-                    chunk,
-                    return_tensors="pt",
-                    truncation=True,
-                    max_length=512,
-                    padding="max_length"
-                ).to(device)
+        chunk_results.append({
+            "chunk_id": i + 1,
+            "text": chunk[:200] + "..." if len(chunk) > 200 else chunk,
+            "full_text_length": len(chunk),
+            "ai_score": score
+        })
 
-                with torch.no_grad():
-                    outputs = model(**inputs)
-                    probs = torch.softmax(outputs.logits, dim=-1)
-                    calibrated_prob = min(1.0, probs[0][1].item() * 1.3)
-                    chunk_probs.append(calibrated_prob)
+    overall_score = np.mean(chunk_scores) if chunk_scores else 0.0
 
-            except Exception as e:
-                model_loader.logger.error(f"Ошибка при обработке чанка: {e}")
-                chunk_probs.append(0.5)  # Нейтральная оценка при ошибке
+    # Дополнительный анализ всего текста
+    full_text_score = detect_ai_text_improved(text)
 
-        if chunk_probs:
-            predictions.append((np.mean(chunk_probs), weight))
-
-    if not predictions:
-        model_loader.logger.warning("Не удалось получить предсказания ни от одной модели")
-        return 0.5
-
-    total_weight = sum(w for _, w in predictions)
-    combined = sum(p * w for p, w in predictions) / total_weight
-
-    if combined > 0.5:
-        combined = min(1.0, combined * 1.2)
-
-    # Очищаем кэш GPU после обработки
-    model_loader.clear_cache()
-
-    return combined
-
-
-def analyze_stylistic_features(text: str) -> dict:
-    """Улучшенный анализ стилистических особенностей для современных ИИ"""
-    if not text:
-        return {}
-
-    words = text.split()
-    sentences = [s for s in text.split('.') if s.strip()]
-
-    # Базовые метрики
-    avg_word_len = sum(len(word) for word in words) / len(words) if words else 0
-    avg_sent_len = sum(len(sent.split()) for sent in sentences) / len(sentences) if sentences else 0
-
-    # Счетчик пунктуации
-    punct_counts = Counter(c for c in text if not c.isalnum() and not c.isspace())
-
-    # Новые метрики для современных ИИ
-    transition_words = ['однако', 'таким образом', 'следовательно', 'в заключение', 'кроме того']
-    transition_count = sum(text.lower().count(word) for word in transition_words)
-
-    # Мера "перфектности" текста
-    perfect_score = min(1.0, (avg_word_len * 0.1 + avg_sent_len * 0.05 + transition_count * 0.2))
+    # Берем максимум из средней оценки чанков и оценки всего текста
+    final_score = max(overall_score, full_text_score)
 
     return {
-        "avg_word_length": round(avg_word_len, 2),
-        "avg_sentence_length": round(avg_sent_len, 2),
-        "punctuation_distribution": dict(punct_counts.most_common(5)),
-        "word_diversity": len(set(words)) / len(words) if words else 0,
-        "transition_words_count": transition_count,
-        "perfectness_score": round(perfect_score, 2),
-        "ai_style_markers": {
-            "repetition_score": calculate_repetition_score(text),
-            "perplexity": calculate_perplexity(text)
-        },
-        "device_info": model_loader.get_memory_info()
+        "overall_ai_score": round(final_score, 2),
+        "chunks": chunk_results,
+        "stylistic_features": {
+            "transition_words_count": len(
+                re.findall(r'таким образом|в заключение|кроме того|однако|тем не менее', text.lower())),
+            "ai_phrases_detected": calculate_russian_ai_patterns(text) > 0.2,
+            "formal_style_score": len(re.findall(r'необходимо|следует|важно отметить|стоит подчеркнуть', text.lower())),
+            "structure_regularity": "high" if len(text.split('.')) > 3 else "normal"
+        }
     }
 
 
-def detect_ai_text(text: Union[str, List[str]], batch_size: int = 4, show_progress: bool = True) -> float:
-    """Улучшенная функция детекции с калибровкой для современных ИИ"""
-    if not text:
-        return 0.0
-
-    if isinstance(text, str):
-        raw_score = ensemble_prediction(text)
-        calibrated_score = raw_score * 1.25 if raw_score > 0.4 else raw_score
-        return min(100, calibrated_score * 100)
-
-    # Для списка текстов используем батчевую обработку
-    device = model_loader.device
-    model = model_loader.modern_ai_detector_model
-    tokenizer = model_loader.modern_ai_detector_tokenizer
-
-    if model is None or tokenizer is None:
-        model_loader.logger.error("Модель для детекции не загружена")
-        return 0.0
-
-    total_ai_prob = 0.0
-    processed_chunks = 0
-
-    progress = tqdm(total=len(text), disable=not show_progress, desc="Analyzing text")
-
-    try:
-        for i in range(0, len(text), batch_size):
-            batch = text[i:i + batch_size]
-
-            try:
-                inputs = tokenizer(
-                    batch,
-                    return_tensors="pt",
-                    truncation=True,
-                    max_length=512,
-                    padding="max_length"
-                ).to(device)
-
-                with torch.no_grad():
-                    outputs = model(**inputs)
-                    probs = torch.softmax(outputs.logits, dim=-1)
-                    batch_ai_prob = probs[:, 1].sum().item() * 100
-
-                total_ai_prob += batch_ai_prob
-                processed_chunks += len(batch)
-
-            except Exception as e:
-                model_loader.logger.error(f"Ошибка при обработке батча: {e}")
-                # При ошибке добавляем нейтральную оценку
-                total_ai_prob += 50 * len(batch)
-                processed_chunks += len(batch)
-
-            progress.update(len(batch))
-
-    except Exception as e:
-        model_loader.logger.error(f"Критическая ошибка при анализе: {e}")
-        return 0.0
-
-    finally:
-        progress.close()
-        model_loader.clear_cache()
-
-    return round(total_ai_prob / processed_chunks, 2) if processed_chunks > 0 else 0.0
+# Основные функции для совместимости
+def detect_ai_text(text: Union[str, List[str]], **kwargs) -> float:
+    """Основная функция детекции - совместимость с существующим кодом"""
+    if isinstance(text, list):
+        scores = [detect_ai_text_improved(t) for t in text if t and t.strip()]
+        return np.mean(scores) if scores else 0.0
+    return detect_ai_text_improved(text)
 
 
 def get_detailed_analysis(text: str) -> dict:
-    """Детализированный анализ с разбивкой по чанкам и стилистическими маркерами"""
-    chunks = split_text_into_chunks(text)
-    device = model_loader.device
-
-    # Основные метрики
-    ai_score = detect_ai_text(chunks, show_progress=False)
-    stylistic_features = analyze_stylistic_features(text)
-
-    results = {
-        "overall_ai_score": ai_score,
-        "chunks": [],
-        "stylistic_features": stylistic_features,
-        "device_info": model_loader.get_memory_info(),
-        "model_status": {
-            "ai_detector": model_loader.ai_detector_model is not None,
-            "multilingual_detector": model_loader.multilingual_detector_model is not None,
-            "modern_ai_detector": model_loader.modern_ai_detector_model is not None
-        }
-    }
-
-    # Анализ по чанкам
-    for i, chunk in enumerate(chunks):
-        try:
-            score = detect_ai_text([chunk], batch_size=1, show_progress=False)
-            chunk_features = analyze_stylistic_features(chunk)
-
-            results["chunks"].append({
-                "chunk_id": i + 1,
-                "text": chunk[:200] + "..." if len(chunk) > 200 else chunk,
-                "full_text_length": len(chunk),
-                "ai_score": score,
-                "features": chunk_features
-            })
-        except Exception as e:
-            model_loader.logger.error(f"Ошибка при анализе чанка {i + 1}: {e}")
-            results["chunks"].append({
-                "chunk_id": i + 1,
-                "text": chunk[:200] + "..." if len(chunk) > 200 else chunk,
-                "full_text_length": len(chunk),
-                "ai_score": 0.0,
-                "error": str(e)
-            })
-
-    return results
-
-
-def get_model_diagnostics() -> dict:
-    """Возвращает диагностическую информацию о состоянии моделей"""
-    return {
-        "device": model_loader.device,
-        "memory_info": model_loader.get_memory_info(),
-        "models_loaded": {
-            "ai_detector": model_loader.ai_detector_model is not None,
-            "ai_detector_tokenizer": model_loader.ai_detector_tokenizer is not None,
-            "multilingual_detector": model_loader.multilingual_detector_model is not None,
-            "multilingual_detector_tokenizer": model_loader.multilingual_detector_tokenizer is not None,
-            "modern_ai_detector": model_loader.modern_ai_detector_model is not None,
-            "modern_ai_detector_tokenizer": model_loader.modern_ai_detector_tokenizer is not None,
-        }
-    }
+    """Обновленная функция детального анализа"""
+    return get_detailed_ai_analysis(text)

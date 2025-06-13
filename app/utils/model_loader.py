@@ -6,15 +6,12 @@ from typing import Optional
 import logging
 import warnings
 
-# Подавляем предупреждения для чистого вывода
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class ModelLoader:
-    """
-    Класс для ленивой загрузки и хранения NLP моделей с поддержкой NVIDIA и AMD GPU
-    """
+    """Класс для ленивой загрузки NLP моделей"""
     _instance = None
 
     def __new__(cls):
@@ -32,10 +29,8 @@ class ModelLoader:
 
     def _get_optimal_device(self) -> str:
         """Определяет оптимальное устройство для вычислений"""
-        # Проверяем NVIDIA CUDA
         if torch.cuda.is_available():
             try:
-                # Тестовая операция на GPU
                 test_tensor = torch.tensor([1.0]).cuda()
                 _ = test_tensor * 2
                 device = f"cuda:{torch.cuda.current_device()}"
@@ -46,12 +41,9 @@ class ModelLoader:
             except Exception as e:
                 self.logger.warning(f"CUDA недоступна: {e}")
 
-        # Проверяем AMD ROCm (использует тот же CUDA API)
         try:
-            # ROCm может быть доступен через переменные окружения
             import os
             if os.environ.get('ROCM_PATH') or os.environ.get('HIP_PATH'):
-                # Пробуем создать тензор на "CUDA" устройстве (ROCm эмулирует CUDA API)
                 test_tensor = torch.tensor([1.0], device='cuda:0')
                 _ = test_tensor * 2
                 self.logger.info("AMD GPU с ROCm найдена")
@@ -59,18 +51,15 @@ class ModelLoader:
         except Exception:
             pass
 
-        # Fallback на CPU
         self.logger.info("Используется CPU")
         return "cpu"
 
     @property
     def device(self) -> str:
-        """Возвращает текущее устройство"""
         return self._device
 
     @property
     def nlp(self) -> Optional[spacy.Language]:
-        """Инициализирует и возвращает модель spaCy для русского языка."""
         if self._nlp is None:
             try:
                 self._nlp = spacy.load("ru_core_news_lg")
@@ -82,21 +71,17 @@ class ModelLoader:
 
     @property
     def model(self) -> Optional[SentenceTransformer]:
-        """Инициализирует и возвращает модель SentenceTransformer."""
         if self._model is None:
             try:
                 self.logger.info("Загрузка SentenceTransformer модели...")
                 self._model = SentenceTransformer('paraphrase-xlm-r-multilingual-v1')
-
-                # Перемещаем на нужное устройство
                 self._model = self._model.to(self._device)
 
-                # Используем float16 для GPU для экономии памяти
                 if self._device.startswith('cuda'):
                     try:
                         self._model.half()
                     except:
-                        pass  # Если не поддерживается, используем float32
+                        pass
 
                 model_device = next(self._model.parameters()).device
                 self.logger.info(f"SentenceTransformer загружен на: {model_device}")
@@ -108,7 +93,6 @@ class ModelLoader:
 
     @property
     def tokenizer(self) -> Optional[AutoTokenizer]:
-        """Инициализирует и возвращает токенизатор для модели."""
         if self._tokenizer is None:
             try:
                 self._tokenizer = AutoTokenizer.from_pretrained(
@@ -121,95 +105,112 @@ class ModelLoader:
         return self._tokenizer
 
     def _load_classification_model(self, model_key: str, model_name: str):
-        """Универсальный метод для загрузки классификационных моделей"""
+        """Загрузка классификационной модели"""
         if model_key not in self._models:
             try:
                 self.logger.info(f"Загрузка модели {model_name}...")
 
-                # Выбираем тип данных в зависимости от устройства
-                dtype = torch.float16 if self._device.startswith('cuda') else torch.float32
-
-                model = AutoModelForSequenceClassification.from_pretrained(
+                # Пробуем несколько моделей для детекции AI
+                model_variants = [
                     model_name,
-                    torch_dtype=dtype
-                )
+                    'Hello-SimpleAI/chatgpt-detector-roberta',
+                    'roberta-base-openai-detector',
+                    'openai-detector'
+                ]
 
-                # Перемещаем на устройство
-                model = model.to(self._device)
-                model.eval()  # Режим инференса
+                model = None
+                for variant in model_variants:
+                    try:
+                        dtype = torch.float16 if self._device.startswith('cuda') else torch.float32
+                        model = AutoModelForSequenceClassification.from_pretrained(
+                            variant,
+                            torch_dtype=dtype,
+                            ignore_mismatched_sizes=True  # Игнорируем несоответствия размеров
+                        )
+                        model = model.to(self._device)
+                        model.eval()
+                        self.logger.info(f"Модель {variant} загружена на {self._device}")
+                        break
+                    except Exception as e:
+                        self.logger.warning(f"Не удалось загрузить {variant}: {e}")
+                        continue
+
+                if model is None:
+                    self.logger.warning("Не удалось загрузить ни одну модель детекции AI")
+                    return None
 
                 self._models[model_key] = model
-                self.logger.info(f"Модель {model_name} загружена на {self._device}")
 
             except Exception as e:
-                self.logger.error(f"Ошибка загрузки модели {model_name}: {e}")
-
-                # Пробуем загрузить на CPU если не хватает GPU памяти
-                if 'out of memory' in str(e).lower() and self._device.startswith('cuda'):
-                    try:
-                        self.logger.warning("Загружаем на CPU из-за нехватки GPU памяти...")
-                        model = AutoModelForSequenceClassification.from_pretrained(model_name)
-                        model = model.to('cpu')
-                        model.eval()
-                        self._models[model_key] = model
-                        self.logger.info(f"Модель {model_name} загружена на CPU")
-                    except Exception:
-                        return None
-                else:
-                    return None
+                self.logger.error(f"Критическая ошибка загрузки: {e}")
+                return None
 
         return self._models.get(model_key)
 
     def _load_tokenizer(self, tokenizer_key: str, model_name: str):
-        """Универсальный метод для загрузки токенизаторов"""
+        """Загрузка токенизатора"""
         if tokenizer_key not in self._tokenizers:
             try:
-                tokenizer = AutoTokenizer.from_pretrained(model_name)
+                # Пробуем несколько вариантов токенизаторов
+                tokenizer_variants = [
+                    model_name,
+                    'Hello-SimpleAI/chatgpt-detector-roberta',
+                    'roberta-base'
+                ]
+
+                tokenizer = None
+                for variant in tokenizer_variants:
+                    try:
+                        tokenizer = AutoTokenizer.from_pretrained(variant)
+                        self.logger.info(f"Токенизатор {variant} загружен успешно")
+                        break
+                    except Exception:
+                        continue
+
+                if tokenizer is None:
+                    self.logger.warning("Не удалось загрузить токенизатор")
+                    return None
+
                 self._tokenizers[tokenizer_key] = tokenizer
-                self.logger.info(f"Токенизатор для {model_name} загружен успешно")
             except Exception as e:
-                self.logger.error(f"Ошибка загрузки токенизатора для {model_name}: {e}")
+                self.logger.error(f"Ошибка загрузки токенизатора: {e}")
                 return None
         return self._tokenizers.get(tokenizer_key)
 
     @property
     def ai_detector_model(self):
-        """Модель для детекции AI-текста"""
-        return self._load_classification_model('ai_detector', 'roberta-base-openai-detector')
+        """Основная модель для детекции AI-текста"""
+        return self._load_classification_model('ai_detector', 'Hello-SimpleAI/chatgpt-detector-roberta')
 
     @property
     def ai_detector_tokenizer(self):
-        """Токенизатор для модели детекции"""
-        return self._load_tokenizer('ai_detector', 'roberta-base-openai-detector')
+        """Токенизатор для основной модели"""
+        return self._load_tokenizer('ai_detector', 'Hello-SimpleAI/chatgpt-detector-roberta')
 
+    # Алиасы для совместимости
     @property
     def multilingual_detector_model(self):
-        """Мультиязычная модель для детекции"""
-        return self._load_classification_model('multilingual_detector', 'Hello-SimpleAI/chatgpt-detector-roberta')
+        return self.ai_detector_model
 
     @property
     def multilingual_detector_tokenizer(self):
-        """Токенизатор для мультиязычной модели"""
-        return self._load_tokenizer('multilingual_detector', 'Hello-SimpleAI/chatgpt-detector-roberta')
+        return self.ai_detector_tokenizer
 
     @property
     def modern_ai_detector_model(self):
-        """Специальная модель для детекции современных ИИ"""
-        return self._load_classification_model('modern_ai_detector', 'Hello-SimpleAI/chatgpt-detector-roberta')
+        return self.ai_detector_model
 
     @property
     def modern_ai_detector_tokenizer(self):
-        """Токенизатор для модели детекции современных ИИ"""
-        return self._load_tokenizer('modern_ai_detector', 'Hello-SimpleAI/chatgpt-detector-roberta')
+        return self.ai_detector_tokenizer
 
     def clear_cache(self):
-        """Очищает кэш GPU для освобождения памяти"""
+        """Очищает кэш GPU"""
         if self._device.startswith('cuda'):
             torch.cuda.empty_cache()
-            self.logger.info("GPU кэш очищен")
 
     def get_memory_info(self) -> dict:
-        """Возвращает информацию о памяти устройства"""
+        """Информация о памяти устройства"""
         info = {"device": self._device}
 
         if self._device.startswith('cuda'):
@@ -228,5 +229,5 @@ class ModelLoader:
         return info
 
 
-# Создаем глобальный экземпляр
+# Глобальный экземпляр
 model_loader = ModelLoader()
