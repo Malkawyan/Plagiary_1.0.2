@@ -3,7 +3,7 @@ import { TextProcessor } from './text_processor.js';
 import { SpellingView } from './spelling_view.js';
 import { UniquenessView } from './uniqueness_view.js';
 import { SeoAnalysisView } from './seo_analysis_view.js';
-import { AIAnalysisView } from './ai_analysis_view.js';
+// import { AIAnalysisView } from './ai_analysis_view.js'; // Закомментирован импорт ИИ-анализа
 import { TextHighlightManager } from './text_highlight_manager.js';
 
 /**
@@ -16,14 +16,14 @@ export class UIUpdater {
      * @param {HTMLElement} uniResultsDiv - DOM элемент для результатов уникальности
      * @param {HTMLElement} seoResultsDiv - DOM элемент для результатов SEO
      * @param {HTMLElement} contentDiv - DOM элемент с текстом для анализа
-     * @param {HTMLElement} aiResultsDiv - DOM элемент для результатов AI-анализа
+     * @param {HTMLElement} aiResultsDiv - DOM элемент для результатов AI-анализа (закомментирован)
      */
     constructor(resultsDiv, uniResultsDiv, seoResultsDiv, contentDiv, aiResultsDiv) {
         this.resultsDiv = resultsDiv;
         this.uniResultsDiv = uniResultsDiv;
         this.seoResultsDiv = seoResultsDiv;
         this.contentDiv = contentDiv;
-        this.aiResultsDiv = aiResultsDiv;
+        // this.aiResultsDiv = aiResultsDiv; // Закомментирован
         this.data = null;
         this.currentView = 'all';
 
@@ -31,7 +31,7 @@ export class UIUpdater {
         this.uniquenessView = new UniquenessView(this.uniResultsDiv, this.resultsDiv);
         this.seoAnalysisView = new SeoAnalysisView(this.seoResultsDiv);
         this.spellingView = new SpellingView(document.getElementById('spell-results'));
-        this.aiAnalysisView = new AIAnalysisView(this.aiResultsDiv);
+        // this.aiAnalysisView = new AIAnalysisView(this.aiResultsDiv); // Закомментирован ИИ-анализ
 
         // Добавляем CSS-стили для подсветки текста
         TextHighlightManager.ensureHighlightingStyles();
@@ -60,7 +60,7 @@ export class UIUpdater {
         // Очищаем результаты во всех панелях
         this.uniResultsDiv.innerHTML = 'Результаты проверки уникальности будут отображены здесь.';
         this.seoResultsDiv.innerHTML = 'Результаты SEO анализа будут отображены здесь.';
-        this.aiResultsDiv.innerHTML = 'Результаты проверки на написание текста ИИ будут здесь.';
+        // this.aiResultsDiv.innerHTML = 'Результаты проверки на написание текста ИИ будут здесь.'; // Закомментирован
 
         const spellResultsDiv = document.getElementById('spell-results');
         if (spellResultsDiv) {
@@ -76,7 +76,7 @@ export class UIUpdater {
 
     /**
      * Переключает режим отображения
-     * @param {string} viewType - Режим отображения ('all', 'uniqueness', 'spelling', 'ai', 'seo')
+     * @param {string} viewType - Режим отображения ('all', 'uniqueness', 'spelling', 'seo') // убран 'ai'
      */
     switchView(viewType) {
         console.log(`Переключение режима отображения на: ${viewType}`);
@@ -154,12 +154,14 @@ export class UIUpdater {
         // Отображаем результаты SEO-анализа
         this.seoAnalysisView.displayResults(data);
 
-        // Отображаем результаты AI-анализа
+        // Закомментирован блок отображения результатов AI-анализа
+        /*
         if (data.ai_text_detected !== undefined || data.overall_ai_score !== undefined) {
             this.aiAnalysisView.displayResults(data);
         } else {
             this.aiResultsDiv.innerHTML = `<p class="ai-error">Данные анализа ИИ недоступны</p>`;
         }
+        */
 
         // Отображаем результаты проверки орфографии
         if (data.spelling_errors) {
