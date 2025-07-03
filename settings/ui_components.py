@@ -21,16 +21,16 @@ class StyleHelper:
     SUCCESS_COLOR = "#2E7D32"  # Зеленый для успешных действий
 
     # Увеличенные шрифты для презентации
-    TITLE_FONT = QFont('Segoe UI', 24, QFont.Bold)  # Было 14
-    HEADER_FONT = QFont('Segoe UI', 18, QFont.Bold)  # Было 11
-    NORMAL_FONT = QFont('Segoe UI', 16)  # Было 10
-    BUTTON_FONT = QFont('Segoe UI', 16, QFont.Bold)  # Было 10
-    SUBTITLE_FONT = QFont('Segoe UI', 14)  # Новый шрифт
+    TITLE_FONT = QFont('Segoe UI', 24, QFont.Bold)
+    HEADER_FONT = QFont('Segoe UI', 18, QFont.Bold)
+    NORMAL_FONT = QFont('Segoe UI', 16)
+    BUTTON_FONT = QFont('Segoe UI', 16, QFont.Bold)
+    SUBTITLE_FONT = QFont('Segoe UI', 14)
 
     @staticmethod
     def setup_button(button, primary=True, icon=None, large=False):
-        """Стилизует кнопку в соответствии с цветовой схемой"""
-        padding = "12px 24px" if large else "10px 20px"  # Увеличенные отступы
+        """Стилизуем кнопку в соответствии с цветовой схемой"""
+        padding = "12px 24px" if large else "10px 20px"
 
         if primary:
             button.setStyleSheet(f"""
@@ -144,8 +144,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle('Конвертер документов для университета')
 
-        # Увеличиваем размер окна для презентации
-        self.setGeometry(50, 50, 1400, 900)  # Было 960x600
+        self.setGeometry(50, 50, 1400, 900)
         self.setMinimumSize(1200, 800)
 
         # Установка стиля окна
@@ -191,8 +190,8 @@ class MainWindow(QMainWindow):
 
         self.central_widget = QWidget()
         self.main_layout = QVBoxLayout(self.central_widget)
-        self.main_layout.setContentsMargins(30, 30, 30, 30)  # Увеличенные отступы
-        self.main_layout.setSpacing(25)  # Увеличенные промежутки
+        self.main_layout.setContentsMargins(30, 30, 30, 30)
+        self.main_layout.setSpacing(25)
 
         self._setup_ui()
         self.setCentralWidget(self.central_widget)
@@ -226,7 +225,7 @@ class MainWindow(QMainWindow):
 
         # Кнопка настроек в шапке
         self.settings_button = QPushButton("⚙️ Настройки")
-        self.settings_button.setFixedSize(180, 60)  # Увеличенная кнопка
+        self.settings_button.setFixedSize(180, 60)
         self.settings_button.setToolTip("Настройки порога схожести")
         StyleHelper.setup_button(self.settings_button, primary=False, large=True)
         self.settings_button.clicked.connect(self._show_settings_dialog)
@@ -240,7 +239,7 @@ class MainWindow(QMainWindow):
         content_widget = QWidget()
         content_layout = QHBoxLayout(content_widget)
         content_layout.setContentsMargins(0, 15, 0, 0)
-        content_layout.setSpacing(30)  # Увеличенный промежуток
+        content_layout.setSpacing(30)
 
         # ---- Левая панель: список файлов ----
         file_panel = QWidget()
@@ -328,7 +327,7 @@ class MainWindow(QMainWindow):
 
         # ---- Правая панель: статус и информация ----
         info_panel = QWidget()
-        info_panel.setMaximumWidth(400)  # Увеличена ширина
+        info_panel.setMaximumWidth(400)
         info_panel_layout = QVBoxLayout(info_panel)
         info_panel_layout.setContentsMargins(0, 0, 0, 0)
         info_panel_layout.setSpacing(20)
@@ -445,7 +444,7 @@ class MainWindow(QMainWindow):
 
         dialog = QDialog(self)
         dialog.setWindowTitle("Настройки")
-        dialog.setMinimumSize(600, 400)  # Увеличенный размер диалога
+        dialog.setMinimumSize(600, 400)
         dialog.setStyleSheet(f"""
             QDialog {{
                 background-color: white;

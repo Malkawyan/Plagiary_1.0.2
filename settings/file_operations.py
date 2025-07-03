@@ -10,7 +10,7 @@ def create_file_item(filename):
     from ui_components import StyleHelper
 
     widget = QWidget()
-    widget.setMinimumHeight(40)  # Увеличенная высота элемента
+    widget.setMinimumHeight(40)
     layout = QHBoxLayout()
     layout.setContentsMargins(10, 8, 10, 8)
 

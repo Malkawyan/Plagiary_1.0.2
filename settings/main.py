@@ -4,15 +4,13 @@ from ui_components import MainWindow
 from file_operations import load_files
 from settings import update_similarity_threshold, DEFAULT_THRESHOLD
 
-# НЕ импортируем base.py здесь!
-
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
 
     main_window = MainWindow()
 
-    # Загружаем файлы при старте (без импорта base.py)
+    # Загружаем файлы при старте
     load_files(
         main_window.file_list_layout,
         main_window.process_button,

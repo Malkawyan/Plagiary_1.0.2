@@ -16,8 +16,8 @@ _model = None
 _nlp_ru = None
 _tokenizer = None
 
-# Константы (добавьте ваши значения)
-MAX_TOKENS = 512  # Пример значения, замените на нужное
+# Константы
+MAX_TOKENS = 512
 BASE_FOLDER = "output"  # Папка для сохранения результатов
 DATA_FOLDER = "data"  # Папка с исходными файлами
 

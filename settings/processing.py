@@ -122,7 +122,7 @@ def process_selected_files(file_list_layout, statusbar, main_window):
     progress = QProgressDialog("Подготовка к обработке...", "Отмена", 0, len(selected_files), main_window)
     progress.setWindowTitle("Прогресс обработки")
     progress.setWindowModality(Qt.WindowModal)
-    progress.setMinimumDuration(0)  # Показывать сразу
+    progress.setMinimumDuration(0)
     progress.show()
 
     # Создаем и запускаем поток обработки
