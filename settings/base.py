@@ -18,7 +18,7 @@ _tokenizer = None
 
 # Константы
 MAX_TOKENS = 512
-BASE_FOLDER = "output"  # Папка для сохранения результатов
+BASE_FOLDER = "../base"
 DATA_FOLDER = "data"  # Папка с исходными файлами
 
 
